@@ -1,5 +1,7 @@
 # Blockbench BBModel Text Component
 
+[![CI](https://github.com/EaseCation/blockbench-bbmodel-text/actions/workflows/ci.yml/badge.svg)](https://github.com/EaseCation/blockbench-bbmodel-text/actions/workflows/ci.yml)
+
 A Blockbench plugin that adds semantic, editable text components to `.bbmodel` projects. Text remains editable in Blockbench, can use embedded custom fonts, and can be baked into regular geometry + texture for compatibility.
 
 ## Features
@@ -15,6 +17,22 @@ A Blockbench plugin that adds semantic, editable text components to `.bbmodel` p
 - UI translations for English, Chinese, and Japanese.
 
 ## Installation
+
+### From Stable URL
+
+Use this URL in Blockbench via **File > Plugins > Load Plugin > From URL**:
+
+```text
+https://easecation.github.io/blockbench-bbmodel-text/bbmodel-text-component.js
+```
+
+The same build is also published as:
+
+```text
+https://easecation.github.io/blockbench-bbmodel-text/latest.js
+```
+
+This URL is updated automatically by GitHub Actions after every successful push to `main`.
 
 ### From Built Plugin
 
@@ -91,6 +109,15 @@ npm run build
 ```
 
 The generated plugin file is `dist/bbmodel-text-component.js`. The bundle filename intentionally matches the registered Blockbench plugin ID.
+
+## Continuous Delivery
+
+The `CI` workflow runs on pull requests, pushes to `main`, and manual dispatches. It installs dependencies with `npm ci`, runs type checks and tests, builds the Webpack bundle, verifies that exactly one plugin JavaScript file was produced, uploads that file as a workflow artifact, and publishes the latest successful `main` build to GitHub Pages.
+
+Stable public bundle URLs:
+
+- `https://easecation.github.io/blockbench-bbmodel-text/bbmodel-text-component.js`
+- `https://easecation.github.io/blockbench-bbmodel-text/latest.js`
 
 ## Font License Notice
 

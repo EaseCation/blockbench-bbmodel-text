@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build single-file plugin
+        run: npm run build
+
+      - name: Verify plugin bundle
+        run: |
+          test -f dist/bbmodel-text-component.js
+          test "$(find dist -maxdepth 1 -type f -name '*.js' | wc -l | tr -d ' ')" = "1"
+          test -s dist/bbmodel-text-component.js
+          grep -q "bbmodel-text-component" dist/bbmodel-text-component.js
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbmodel-text-component
+          path: dist/bbmodel-text-component.js
+          if-no-files-found: error
+
+      - name: Prepare GitHub Pages site
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p site
+          cp dist/bbmodel-text-component.js site/bbmodel-text-component.js
+          cp dist/bbmodel-text-component.js site/latest.js
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Blockbench BBModel Text Component</title>
+              <style>
+                body { max-width: 760px; margin: 48px auto; padding: 0 20px; font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #20242a; }
+                code, pre { background: #f3f5f7; border-radius: 6px; }
+                code { padding: 2px 5px; }
+                pre { padding: 14px; overflow: auto; }
+                a { color: #0969da; }
+              </style>
+            </head>
+            <body>
+              <h1>Blockbench BBModel Text Component</h1>
+              <p>Stable plugin bundle URLs:</p>
+              <ul>
+                <li><a href="./bbmodel-text-component.js">bbmodel-text-component.js</a></li>
+                <li><a href="./latest.js">latest.js</a></li>
+              </ul>
+              <p>In Blockbench, use <strong>File &gt; Plugins &gt; Load Plugin &gt; From URL</strong> and paste:</p>
+              <pre><code>https://easecation.github.io/blockbench-bbmodel-text/bbmodel-text-component.js</code></pre>
+              <p>Source code: <a href="https://github.com/EaseCation/blockbench-bbmodel-text">EaseCation/blockbench-bbmodel-text</a></p>
+            </body>
+          </html>
+          HTML
+
+      - name: Configure GitHub Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy-pages:
+    name: Deploy stable plugin URL
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
