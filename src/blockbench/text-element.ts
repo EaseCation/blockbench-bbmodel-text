@@ -13,7 +13,7 @@ export class BBTextElement extends (OutlinerElement as any) {
   static selected: BBTextElement[];
   static all: BBTextElement[];
   static behavior: Record<string, any> = {
-    unique_name: true,
+    unique_name: false,
     movable: true,
     rotatable: true,
   };
@@ -222,7 +222,6 @@ export function registerTextElement(): void {
   BBTextElement.prototype.icon = 'text_fields';
   BBTextElement.prototype.movable = true;
   BBTextElement.prototype.rotatable = true;
-  BBTextElement.prototype.needsUniqueName = true;
   BBTextElement.prototype.menu = new Menu([
     ...Outliner.control_menu_group,
     new MenuSeparator('settings'),
