@@ -33,7 +33,7 @@ export function registerPlugin(): void {
     description: t('bb_text.plugin.description'),
     version: '0.1.0',
     variant: 'both',
-    min_version: '5.1.0',
+    min_version: '5.0.0',
     tags: ['Minecraft', 'Text', 'BBModel'],
     icon: 'text_fields',
     onload() {

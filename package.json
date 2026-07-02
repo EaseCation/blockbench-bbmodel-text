@@ -20,7 +20,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.13.14",
-    "blockbench-types": "^5.1.0",
+    "blockbench-types": "^5.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",
