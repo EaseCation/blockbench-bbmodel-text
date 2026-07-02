@@ -7,8 +7,13 @@ const elementSource = fs.readFileSync(path.join(root, 'src', 'blockbench', 'text
 const actionsSource = fs.readFileSync(path.join(root, 'src', 'blockbench', 'actions.ts'), 'utf8');
 
 assert(
-  /get\s+from\s*\(\)\s*:\s*\[number,\s*number,\s*number\]\s*\{\s*return this\.origin;\s*\}/m.test(elementSource),
-  'BBTextElement must expose origin as from so Blockbench position sliders can edit it',
+  /get\s+position\s*\(\)\s*:\s*\[number,\s*number,\s*number\]\s*\{\s*return this\.origin;\s*\}/m.test(elementSource),
+  'BBTextElement must expose origin as position so Blockbench move/slider code edits it exactly once',
+);
+
+assert(
+  !/get\s+from\s*\(/m.test(elementSource),
+  'BBTextElement must not alias origin as from: moveElementsInSpace writes both from and origin, doubling every drag step',
 );
 
 assert(

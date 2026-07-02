@@ -72,7 +72,12 @@ export class BBTextElement extends (OutlinerElement as any) {
     return save;
   }
 
-  get from(): [number, number, number] {
+  // Alias origin as `position` (not `from`): moveElementsInSpace writes both
+  // `el.from` and `el.origin` for rotatable elements, which would apply the
+  // drag delta twice to the shared array. The `position` path writes once and
+  // skips the origin write (`!el.position` guard); sliders read origin and
+  // write `obj.from || obj.position`.
+  get position(): [number, number, number] {
     return this.origin;
   }
 
