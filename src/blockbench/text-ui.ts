@@ -526,7 +526,7 @@ export function registerTextUI() {
   document.addEventListener('dblclick', dbl, true);
   cleanup.push(() => document.removeEventListener('dblclick', dbl, true));
   Blockbench.bbText = {
-    version: '0.2.0',
+    version: '0.2.1',
     create: createText,
     edit: editText,
     update: (id: string, data: TextData) =>

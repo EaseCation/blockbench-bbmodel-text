@@ -437,6 +437,8 @@ test('native copy carries embedded fonts and independent pixels to another proje
       original = source.faces.up.getTexture().getDataURL();
     Clipbench.setElements([source]);
     Clipbench.groups = undefined;
+    // Desktop clipboard crosses a JSON boundary; it must not rely on shared JS references.
+    Clipbench.elements = JSON.parse(JSON.stringify(Clipbench.elements));
     setupProject(Formats.free);
     Clipbench.pasteOutliner();
     const c = Cube.all[0],
@@ -646,4 +648,84 @@ test('text color inspector cancels locally and confirms one undo', async ({ page
     .poll(() => page.evaluate(() => Blockbench.mcuiStudio.contents.inspect().data.color))
     .toBe('#00ff00ff');
   expect(await page.evaluate(() => Undo.history.length)).toBe(initial.history + 1);
+});
+
+test('complex UI moves reuse immutable transfer resources; editing replaces pixels and Undo restores them', async ({
+  page,
+}) => {
+  await start(page, ['ui', 'text']);
+  const result = await page.evaluate(async () => {
+    const api = Blockbench.mcuiStudio.contents,
+      app = Blockbench.mcuiStudio.getStudio();
+    const id = await Blockbench.bbText.create();
+    app.execute('Many labels', (doc) => {
+      const template = doc.nodes[id];
+      for (let i = 0; i < 70; i++) {
+        const n = JSON.parse(JSON.stringify(template));
+        n.id = 'perf-label-' + i;
+        n.name = n.id;
+        n.layout.offset.y = i * 10;
+        doc.nodes[n.id] = n;
+        doc.nodes[n.parent].children.push(n.id);
+      }
+    });
+    const cubes = Cube.all.filter((c) => c.bb_text);
+    const transfers = new Map(cubes.map((c) => [c.uuid, c.bb_text_transfer]));
+    const fonts = new Set(cubes.map((c) => c.bb_text_transfer.font));
+    const undo = Undo.history.length;
+    app.update(id, (n) => {
+      n.layout.offset.x += 5;
+    });
+    const move = Undo.history.at(-1);
+    const shared = cubes.every(
+      (c) =>
+        c.bb_text_transfer === transfers.get(c.uuid) &&
+        move.before.elements[c.uuid].bb_text_transfer === transfers.get(c.uuid) &&
+        move.post.elements[c.uuid].bb_text_transfer === transfers.get(c.uuid),
+    );
+    const cube = Cube.all.find((c) => c.uuid === app.state.doc.bindings[id].surfaceId);
+    const original = cube.bb_text_transfer;
+    await api.update(id, { ...api.inspect(id).data, text: 'Changed label' });
+    // Let the host finish its canvas-to-image upload before issuing a separate Undo.
+    await cube.faces.up.getTexture().img.decode();
+    const changed = cube.bb_text_transfer;
+    const history = Undo.history.at(-1);
+    const frozen =
+      Object.isFrozen(original) &&
+      Object.isFrozen(original.font) &&
+      Object.isFrozen(original.pixels.data);
+    const saved = Codecs.project.compile({ raw: true, bitmaps: true });
+    const snapshotStable = history.before.elements[cube.uuid].bb_text_transfer === original;
+    Undo.undo();
+    await cube.faces.up.getTexture().img.decode();
+    for (let i = 0; i < 100 && app.state.busy; i++) await new Promise((r) => setTimeout(r, 10));
+    const restored = cube.faces.up
+      .getTexture()
+      .ctx.getImageData(0, 0, original.pixels.width, original.pixels.height).data;
+    return {
+      count: cubes.length,
+      fontCount: fonts.size,
+      shared,
+      undoDelta: Undo.history.length - undo,
+      changed: changed !== original,
+      snapshotStable,
+      frozen,
+      samePixels: Array.from(restored).every((v, i) => v === original.pixels.data[i]),
+
+      stripped: saved.elements.every((e) => e.bb_text_transfer === undefined),
+      error: app.state.error,
+    };
+  });
+  expect(result).toEqual({
+    count: 71,
+    fontCount: 1,
+    shared: true,
+    undoDelta: 2,
+    changed: true,
+    snapshotStable: true,
+    frozen: true,
+    samePixels: true,
+    stripped: true,
+    error: null,
+  });
 });

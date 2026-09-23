@@ -10,6 +10,58 @@ const snapshots = new Map<
   { signature: string; rect: number[]; texture: string; pixel: string }
 >();
 const icons = new Map<any, any>();
+// Host Property type "instance" copies these immutable snapshots by reference.
+// Only native clipboard JSON materializes them; Undo must not clone the full font per Cube.
+let transferFonts = new WeakMap<object, any>();
+function immutableTransfer(value: any) {
+  if (!value) return null;
+  if (Object.isFrozen(value)) return value;
+  return Object.freeze({
+    source: value.source,
+    font: value.font ? Object.freeze({ ...value.font }) : null,
+    pixels: value.pixels
+      ? Object.freeze({ ...value.pixels, data: Object.freeze(Array.from(value.pixels.data)) })
+      : null,
+  });
+}
+function transferFor(cube: any, texture: any) {
+  const font = resolveFontResource(cube.bb_text.font_id),
+    source = texture?.getDataURL() || '';
+  const old = cube.bb_text_transfer;
+  // Undo restores the prior immutable payload before the texture image asynchronously
+  // decodes. Reuse it by its PNG identity instead of capturing stale canvas pixels.
+  if (
+    old &&
+    Object.isFrozen(old) &&
+    old.source === source &&
+    old.font?.id === font.id &&
+    old.font?.hash === font.hash &&
+    old.font?.data_url === font.data_url &&
+    old.pixels?.width === texture?.width &&
+    old.pixels?.height === texture?.height
+  )
+    return old;
+  let sharedFont = transferFonts.get(font);
+  if (!sharedFont) {
+    sharedFont = Object.freeze({ ...font });
+    transferFonts.set(font, sharedFont);
+  }
+  const value = Object.freeze({
+    source,
+    font: sharedFont,
+    pixels: texture
+      ? Object.freeze({
+          width: texture.width,
+          height: texture.height,
+          data: Object.freeze(
+            Array.from(texture.ctx.getImageData(0, 0, texture.width, texture.height).data),
+          ),
+        })
+      : null,
+  });
+  return value;
+}
+
 export function studioApi(): any {
   const api = Blockbench.mcuiStudio?.contents;
   return api?.version === 1 ? api : null;
@@ -88,16 +140,7 @@ export function syncRecovery(stamp = false, project = Project) {
       icons.set(cube, { own: Object.prototype.hasOwnProperty.call(cube, 'icon'), icon: cube.icon });
     cube.icon = 'text_fields';
     const texture = textureOf(cube);
-    cube.bb_text_transfer = {
-      font: clone(resolveFontResource(cube.bb_text.font_id)),
-      pixels: texture
-        ? {
-            width: texture.width,
-            height: texture.height,
-            data: Array.from(texture.ctx.getImageData(0, 0, texture.width, texture.height).data),
-          }
-        : null,
-    };
+    cube.bb_text_transfer = transferFor(cube, texture);
   }
   for (const cube of project.elements)
     if (cube instanceof Cube && cube.bb_text === null) delete store.entries[cube.uuid];
@@ -257,12 +300,12 @@ export function nativeEditing(value: boolean) {
 export function registerCarriers() {
   properties.push(new Property(Cube, 'object', 'bb_text', { default: () => null, exposed: false }));
   properties.push(
-    new Property(Cube, 'object', 'bb_text_transfer', {
+    new Property(Cube, 'instance', 'bb_text_transfer', {
       default: () => null,
       exposed: false,
       merge(instance: any, source: any) {
         if (!source.bb_text_transfer) return;
-        instance.bb_text_transfer = clone(source.bb_text_transfer);
+        instance.bb_text_transfer = immutableTransfer(source.bb_text_transfer);
         const font = source.bb_text_transfer.font;
         if (font?.id && font.data_url && Project) {
           const store = fontStore();
@@ -399,4 +442,5 @@ export function unregisterCarriers() {
   }
   icons.clear();
   snapshots.clear();
+  transferFonts = new WeakMap();
 }
