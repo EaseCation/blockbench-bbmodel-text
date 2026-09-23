@@ -29,7 +29,8 @@ export function connectStudio(edit: (id: string) => void) {
       },
       seal: (id: string, data: any) => {
         embedFont(data.font_id);
-        const cube = Cube.all.find((c: any) => c.uuid === id);
+        const candidate = OutlinerNode.uuids[id];
+        const cube = candidate instanceof Cube ? candidate : undefined;
         return cube ? { fingerprint: fingerprint(cube) } : {};
       },
       resources: () => structuredClone(getProjectFonts()),

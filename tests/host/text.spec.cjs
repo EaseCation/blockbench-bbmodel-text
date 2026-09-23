@@ -729,3 +729,107 @@ test('complex UI moves reuse immutable transfer resources; editing replaces pixe
     error: null,
   });
 });
+
+test('text measurement cache follows width, font identity, project and library changes', async ({
+  page,
+}) => {
+  await start(page, ['ui']);
+  await page.evaluate(() => {
+    const api = Blockbench.mcuiStudio.contents,
+      register = api.register;
+    api.register = (provider) => {
+      window.measuredProvider = provider;
+      return register(provider);
+    };
+  });
+  await plugin(page, 'bbmodel-text-component', textBundle);
+  const result = await page.evaluate(async () => {
+    const id = await Blockbench.bbText.create(),
+      api = Blockbench.mcuiStudio.contents,
+      p = window.measuredProvider;
+    const data = {
+      ...api.inspect(id).data,
+      text: '多语言 Cache measurement '.repeat(15),
+      font_size: 1,
+      letter_spacing: 0.25,
+    };
+    await p.prepare(data);
+    const wide = p.measure(data, 100);
+    const fn = CanvasRenderingContext2D.prototype.measureText;
+    let calls = 0;
+    CanvasRenderingContext2D.prototype.measureText = function (...args) {
+      calls++;
+      return fn.apply(this, args);
+    };
+    for (let i = 0; i < 20; i++) p.measure({ ...data, color: '#ff0000', opacity: 0.5 }, 100);
+    const warmCalls = calls;
+    // A document may contain more than 256 different labels, not just repeated strings.
+    for (let i = 0; i < 300; i++) p.measure({ ...data, text: 'Unique label ' + i }, 100);
+    calls = 0;
+    for (let i = 0; i < 300; i++) p.measure({ ...data, text: 'Unique label ' + i }, 100);
+    const uniqueWarmCalls = calls;
+    const narrow = p.measure(data, 40),
+      differentWidthCalls = calls - warmCalls;
+    const long = p.measure({ ...data, line_height: 2 }, 100);
+    const spaced = p.measure({ ...data, letter_spacing: 2 }, 100);
+    const natural = p.measure(data);
+    natural.width = 0;
+    const intact = p.measure(data).width > 0;
+    CanvasRenderingContext2D.prototype.measureText = fn;
+    const font = Project.unhandled_root_fields.bb_text.fonts.find((f) => f.id === data.font_id);
+    const local = {
+      ...font,
+      id: 'cache-font',
+      hash: font.hash + '-cache-a',
+      family: 'SharedFamily',
+    };
+    Project.unhandled_root_fields.bb_text.fonts.push(local);
+    const custom = { ...data, font_id: local.id };
+    await p.prepare(custom);
+    p.measure(custom, 100);
+    const before = document.fonts.size;
+    Project.unhandled_root_fields.bb_text.fonts = Project.unhandled_root_fields.bb_text.fonts.map(
+      (f) => (f.id === local.id ? { ...f, hash: font.hash + '-cache-b' } : f),
+    );
+    const staleReady = p.ready(custom);
+    await p.prepare(custom);
+    const ready = p.ready(custom);
+    const newFace = document.fonts.size > before;
+    setupProject(Formats.free);
+    const missingAfterSwitch = p.ready(custom);
+    localStorage.setItem('bbmodel_text_component.fonts', JSON.stringify([local]));
+    await p.prepare(custom);
+    const fromLibrary = p.measure(custom, 100);
+    localStorage.setItem('bbmodel_text_component.fonts', '[]');
+    const removed = p.ready(custom);
+    return {
+      warmCalls,
+      uniqueWarmCalls,
+      differentWidthCalls,
+      narrow: narrow.height,
+      wide: wide.height,
+      lineHeight: long.height,
+      spaced: spaced.height,
+      intact,
+      staleReady,
+      ready,
+      newFace,
+      missingAfterSwitch,
+      fromLibrary: fromLibrary.height,
+      removed,
+    };
+  });
+  expect(result.warmCalls).toBe(0);
+  expect(result.uniqueWarmCalls).toBe(0);
+  expect(result.differentWidthCalls).toBeGreaterThan(0);
+  expect(result.narrow).toBeGreaterThan(result.wide);
+  expect(result.lineHeight).toBeGreaterThan(result.wide);
+  expect(result.spaced).toBeGreaterThan(result.wide);
+  expect(result.intact).toBe(true);
+  expect(result.staleReady).toBe(false);
+  expect(result.ready).toBe(true);
+  expect(result.newFace).toBe(true);
+  expect(result.missingAfterSwitch).toBe(false);
+  expect(result.fromLibrary).toBeGreaterThan(0);
+  expect(result.removed).toBe(false);
+});

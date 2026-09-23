@@ -1,6 +1,6 @@
 {
   "name": "blockbench-bbmodel-text",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Semantic editable text components for Blockbench .bbmodel files",
   "main": "dist/bbmodel-text-component.js",
   "scripts": {

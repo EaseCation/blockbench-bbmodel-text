@@ -1,4 +1,4 @@
-# BBModel Text Component v0.2.1
+# BBModel Text Component v0.2.2
 
 为 Blockbench 5.2.1+ 的 Generic Model / `.bbmodel` 创建可编辑文字。新文字始终使用普通零厚度 Cube 和内嵌 PNG；没有安装插件，也能查看、截图和保存成品。
 
@@ -8,7 +8,7 @@
 
 插件可以独立使用。与支持 **Content API 1** 的 [UI Studio](https://github.com/EaseCation/blockbench-ui-studio)同时安装时，文字使用 UI Studio 的 Group＋内容 Cube，并参与 Image 嵌套、Frame / Stack、百分比尺寸、Fill / Hug、视口拖放和统一撤销。两种加载顺序均支持。
 
-建议配套 UI Studio 0.8.2 或更新版本，以包含复杂项目的编辑性能修复。两个插件分别构建、加载；未提供 Content API 1 的旧版 UI Studio 只能使用独立文字功能。
+建议配套 UI Studio 0.8.3 或更新版本，以包含复杂项目的编辑性能修复。两个插件分别构建、加载；未提供 Content API 1 的旧版 UI Studio 只能使用独立文字功能。
 
 ## 使用
 

@@ -74,11 +74,19 @@ export function setProjectFonts(fonts: BBTextFontResource[]): void {
   Project.saved = false;
 }
 
+let globalFontJson: string | null | undefined;
+let globalFontCache: BBTextFontResource[] = [];
 export function getGlobalFonts(): BBTextFontResource[] {
   try {
     const raw = localStorage.getItem(GLOBAL_FONT_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? uniqueFonts(parsed) : [];
+    if (raw !== globalFontJson) {
+      const parsed = raw ? JSON.parse(raw) : [];
+      globalFontCache = Array.isArray(parsed)
+        ? uniqueFonts(parsed).map((font) => Object.freeze({ ...font }))
+        : [];
+      globalFontJson = raw;
+    }
+    return globalFontCache.slice();
   } catch (error) {
     console.warn('[BBText] Failed to read global font library', error);
     return [];
@@ -111,8 +119,16 @@ export function getFontDisplayName(font: BBTextFontResource): string {
 }
 
 export function resolveFontResource(fontId?: string): BBTextFontResource {
-  const match = getAllFonts().find((font) => font.id === fontId);
-  return match || DEFAULT_FONT;
+  return findFontResource(fontId) || DEFAULT_FONT;
+}
+
+export function findFontResource(fontId?: string): BBTextFontResource | undefined {
+  // Most rendering uses embedded project fonts. Do not read/parse the entire local
+  // font library for each glyph measure, fingerprint or resource transfer.
+  return (
+    getProjectFonts().find((font) => font.id === fontId) ??
+    getGlobalFonts().find((font) => font.id === fontId)
+  );
 }
 
 function sanitizeFamily(value: string): string {
@@ -124,9 +140,7 @@ export async function loadFontFamily(fontId?: string): Promise<string> {
   if (loadedFonts.has(resource.hash)) return loadedFonts.get(resource.hash)!;
 
   const promise = (async () => {
-    const family = sanitizeFamily(
-      resource.family || `${resource.name}_${resource.hash.slice(0, 8)}`,
-    );
+    const family = sanitizeFamily(`${resource.family || resource.name}_${resource.hash}`);
     if (typeof FontFace === 'undefined' || !resource.data_url)
       throw new Error('FontFace unavailable');
     const face = new FontFace(family, `url(${resource.data_url})`);

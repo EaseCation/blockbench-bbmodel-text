@@ -1,6 +1,12 @@
 import { textData, hash, type TextData } from '../core/model';
 import { fontStore, getProjectFonts, resolveFontResource, embedFont } from './font-registry';
-import { prepareText, rasterText, standaloneSize, readyText } from './text-renderer';
+import {
+  prepareText,
+  rasterText,
+  standaloneSize,
+  readyText,
+  clearTextCaches,
+} from './text-renderer';
 export const clone = <T>(value: T): T => structuredClone(value);
 let applying = false;
 const properties: any[] = [];
@@ -77,23 +83,32 @@ export function cubes(project = Project): any[] {
 export function textureOf(cube: any): any {
   return cube.faces?.[cube.bb_text?.plane || 'up']?.getTexture();
 }
+let fingerprints = new WeakMap<
+  object,
+  { geometry: string; png: string | undefined; hash: string }
+>();
 export function fingerprint(cube: any): string {
-  return hash(
-    JSON.stringify([
-      cube.from,
-      cube.to,
-      cube.rotation,
-      cube.origin,
-      cube.box_uv,
-      Object.entries(cube.faces).map(([key, face]: [string, any]) => [
-        key,
-        face.texture,
-        face.uv,
-        face.rotation,
-      ]),
-      textureOf(cube)?.getDataURL(),
+  const geometry = [
+    cube.from,
+    cube.to,
+    cube.rotation,
+    cube.origin,
+    cube.box_uv,
+    Object.entries(cube.faces).map(([key, face]: [string, any]) => [
+      key,
+      face.texture,
+      face.uv,
+      face.rotation,
     ]),
-  );
+  ];
+  const key = JSON.stringify(geometry),
+    png = textureOf(cube)?.getDataURL();
+  const previous = fingerprints.get(cube);
+  if (previous?.geometry === key && previous.png === png) return previous.hash;
+  // Keep the exact persisted algorithm; only reuse a previous identical input.
+  const result = hash(JSON.stringify([...geometry, png]));
+  fingerprints.set(cube, { geometry: key, png, hash: result });
+  return result;
 }
 export function aspects(project = Project) {
   return {
@@ -404,8 +419,10 @@ export function registerCarriers() {
     }
   });
   on('finished_edit', () => {
-    for (const cube of cubes())
-      if (managed(cube) && !managed(cube).suspended) cube.bb_text.fingerprint = fingerprint(cube);
+    for (const cube of cubes()) {
+      const owner = managed(cube);
+      if (owner && !owner.suspended) cube.bb_text.fingerprint = fingerprint(cube);
+    }
     syncRecovery();
     capture();
   });
@@ -443,4 +460,6 @@ export function unregisterCarriers() {
   icons.clear();
   snapshots.clear();
   transferFonts = new WeakMap();
+  fingerprints = new WeakMap();
+  clearTextCaches();
 }

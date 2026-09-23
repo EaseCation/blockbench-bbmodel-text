@@ -29,3 +29,11 @@ Clipboard transfer payloads use the host's registered `instance` Property type a
 A transfer includes its PNG identity so Undo can reuse its restored payload before the host's asynchronous image decode updates the canvas. Clipboard JSON still contains self-contained font/pixels; parsed payloads are frozen on merge. The compile hook removes transfers as before, so saved model structure and pluginless compatibility stay unchanged.
 
 Measured with UI Studio 0.8.2 on the same 282-node / 70-text fixture: actual mouse-release commits fell from 1928–2761 ms to 119–176 ms, and a text edit from 2173 ms to 174 ms in the isolated Blockbench Web host. The UI plugin also fixes repeated binding scans during native Group Undo copies; updating both plugins is needed for the full improvement.
+
+## Measurement and font identity caches (0.2.2)
+
+Text layout caches use the actual loaded font family (including content hash), font size, text, line height, letter spacing, alignment and width. Color/opacity/density do not affect measurement. Cached results are immutable; an LRU limits both entry count (1024) and retained text units (1048576), skipping entries over16384 units. One measurement canvas is reused; repeated advances within one layout are memoized. Unload clears measurement/prepared-family state.
+
+Font preparation/readiness resolves the current project's font resource and uses its hash, so replacing a font or changing project cannot reuse another font merely because its ID matches. Embedded fonts are resolved before the global library, whose parsed JSON is reused only while the stored string matches. Runtime FontFace names include the content hash.
+
+Native fingerprints retain exactly the prior serialization/hash algorithm. A WeakMap caches only the last geometry and PNG input per Cube; changed geometry/pixels recompute. Integration sealing uses the host UUID registry rather than scanning every Cube. No new persisted fields or Content API version are required.
