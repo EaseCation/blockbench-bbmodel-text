@@ -35,10 +35,18 @@ function codepoints(text: string): string[] {
   return Array.from(text || '');
 }
 
-export function measureWithLetterSpacing(text: string, measurer: TextMeasurer, letterSpacing: number): number {
+export function measureWithLetterSpacing(
+  text: string,
+  measurer: TextMeasurer,
+  letterSpacing: number,
+): number {
   const chars = codepoints(text);
   if (chars.length === 0) return 0;
-  return chars.reduce((sum, char) => sum + measurer.measure(char), 0) + Math.max(0, chars.length - 1) * letterSpacing;
+  if (!letterSpacing) return measurer.measure(text);
+  return (
+    chars.reduce((sum, char) => sum + measurer.measure(char), 0) +
+    Math.max(0, chars.length - 1) * letterSpacing
+  );
 }
 
 function pushWrappedCharacters(
@@ -62,7 +70,12 @@ function pushWrappedCharacters(
   return current;
 }
 
-function wrapParagraph(paragraph: string, maxWidth: number, measurer: TextMeasurer, letterSpacing: number): string[] {
+function wrapParagraph(
+  paragraph: string,
+  maxWidth: number,
+  measurer: TextMeasurer,
+  letterSpacing: number,
+): string[] {
   if (!Number.isFinite(maxWidth) || maxWidth <= 0) return [paragraph];
   if (paragraph.length === 0) return [''];
 
@@ -73,9 +86,10 @@ function wrapParagraph(paragraph: string, maxWidth: number, measurer: TextMeasur
   for (const token of tokens) {
     const tokenWidth = measureWithLetterSpacing(token, measurer, letterSpacing);
     if (!current) {
-      current = tokenWidth > maxWidth && !/^\s+$/u.test(token)
-        ? pushWrappedCharacters(output, '', token, maxWidth, measurer, letterSpacing)
-        : token;
+      current =
+        tokenWidth > maxWidth && !/^\s+$/u.test(token)
+          ? pushWrappedCharacters(output, '', token, maxWidth, measurer, letterSpacing)
+          : token;
       continue;
     }
 
@@ -102,16 +116,19 @@ export function layoutText(options: TextLayoutOptions, measurer: TextMeasurer): 
   const lineHeight = Math.max(0.1, Number(options.lineHeight) || 1);
   const lineHeightUnits = fontSize * lineHeight;
   const letterSpacing = Number(options.letterSpacing) || 0;
-  const paragraphs = String(options.text ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const paragraphs = String(options.text ?? '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n');
   const fixedWidth = Math.max(MIN_TEXT_BOX_SIZE, Number(options.boxWidth) || MIN_TEXT_BOX_SIZE);
   const shouldWrap = options.layoutMode === 'fixed_width';
 
-  const rawLines = paragraphs.flatMap(paragraph => shouldWrap
-    ? wrapParagraph(paragraph, fixedWidth, measurer, letterSpacing)
-    : [paragraph]
+  const rawLines = paragraphs.flatMap((paragraph) =>
+    shouldWrap ? wrapParagraph(paragraph, fixedWidth, measurer, letterSpacing) : [paragraph],
   );
   const measured = rawLines.length ? rawLines : [''];
-  const lineWidths = measured.map(line => measureWithLetterSpacing(line, measurer, letterSpacing));
+  const lineWidths = measured.map((line) =>
+    measureWithLetterSpacing(line, measurer, letterSpacing),
+  );
   const contentWidth = Math.max(MIN_TEXT_BOX_SIZE, ...lineWidths);
   const width = shouldWrap ? fixedWidth : contentWidth;
   const height = Math.max(lineHeightUnits, measured.length * lineHeightUnits);

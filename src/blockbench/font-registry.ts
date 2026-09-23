@@ -53,18 +53,24 @@ function uniqueFonts(fonts: BBTextFontResource[]): BBTextFontResource[] {
   return result;
 }
 
+export function fontStore(project = Project): any {
+  project.unhandled_root_fields ??= {};
+  return (project.unhandled_root_fields.bb_text ??= { version: 1, fonts: [], entries: {} });
+}
 export function getProjectFonts(): BBTextFontResource[] {
   if (!Project) return [DEFAULT_FONT];
-  if (!Array.isArray(Project.bb_text_fonts)) Project.bb_text_fonts = [];
-  if (!Project.bb_text_fonts.some((font: BBTextFontResource) => font.id === DEFAULT_FONT.id)) {
-    Project.bb_text_fonts.unshift({ ...DEFAULT_FONT });
-  }
-  return Project.bb_text_fonts;
+  const store = fontStore();
+  store.fonts = uniqueFonts([
+    ...(store.fonts || []),
+    ...(Project.bb_text_fonts || []),
+    DEFAULT_FONT,
+  ]);
+  return store.fonts;
 }
 
 export function setProjectFonts(fonts: BBTextFontResource[]): void {
   if (!Project) return;
-  Project.bb_text_fonts = uniqueFonts(fonts);
+  fontStore().fonts = uniqueFonts(fonts);
   Project.saved = false;
 }
 
@@ -105,7 +111,7 @@ export function getFontDisplayName(font: BBTextFontResource): string {
 }
 
 export function resolveFontResource(fontId?: string): BBTextFontResource {
-  const match = getAllFonts().find(font => font.id === fontId);
+  const match = getAllFonts().find((font) => font.id === fontId);
   return match || DEFAULT_FONT;
 }
 
@@ -115,21 +121,25 @@ function sanitizeFamily(value: string): string {
 
 export async function loadFontFamily(fontId?: string): Promise<string> {
   const resource = resolveFontResource(fontId);
-  if (loadedFonts.has(resource.id)) return loadedFonts.get(resource.id)!;
+  if (loadedFonts.has(resource.hash)) return loadedFonts.get(resource.hash)!;
 
   const promise = (async () => {
-    const family = sanitizeFamily(resource.family || `${resource.name}_${resource.hash.slice(0, 8)}`);
-    if (typeof FontFace === 'undefined' || !resource.data_url) return 'monospace';
+    const family = sanitizeFamily(
+      resource.family || `${resource.name}_${resource.hash.slice(0, 8)}`,
+    );
+    if (typeof FontFace === 'undefined' || !resource.data_url)
+      throw new Error('FontFace unavailable');
     const face = new FontFace(family, `url(${resource.data_url})`);
     const loaded = await face.load();
     (document.fonts as any).add(loaded);
     return family;
-  })().catch(error => {
+  })().catch((error) => {
     console.warn(`[BBText] Failed to load font ${resource.name}`, error);
-    return 'monospace';
+    loadedFonts.delete(resource.hash);
+    throw error;
   });
 
-  loadedFonts.set(resource.id, promise);
+  loadedFonts.set(resource.hash, promise);
   return promise;
 }
 
@@ -146,7 +156,9 @@ function bufferToBase64(buffer: ArrayBuffer): string {
 async function sha256(buffer: ArrayBuffer): Promise<string> {
   if (crypto?.subtle) {
     const digest = await crypto.subtle.digest('SHA-256', buffer);
-    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
   }
   let hash = 0;
   for (const byte of new Uint8Array(buffer)) hash = ((hash << 5) - hash + byte) | 0;
@@ -154,13 +166,23 @@ async function sha256(buffer: ArrayBuffer): Promise<string> {
 }
 
 function fileStem(name: string): string {
-  return String(name || t('bb_text.font.imported')).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim() || t('bb_text.font.imported');
+  return (
+    String(name || t('bb_text.font.imported'))
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]+/g, ' ')
+      .trim() || t('bb_text.font.imported')
+  );
 }
 
-export async function createFontFromFile(file: { name: string; content: ArrayBuffer }): Promise<BBTextFontResource> {
+export async function createFontFromFile(file: {
+  name: string;
+  content: ArrayBuffer;
+}): Promise<BBTextFontResource> {
   const ext = (file.name.split('.').pop() || 'otf').toLowerCase();
   const format = ext === 'ttf' ? 'ttf' : 'otf';
   const hash = await sha256(file.content);
+  const existing = getAllFonts().find((font) => font.hash === hash);
+  if (existing) return { ...existing };
   const name = fileStem(file.name);
   return {
     id: `font_${hash.slice(0, 16)}`,
@@ -190,4 +212,14 @@ export function refreshFontSelectOptions(): void {
   } catch {
     // The element panel may not be initialized yet.
   }
+}
+
+/** Called inside the owning edit transaction, after asynchronous font preparation. */
+export function embedFont(id: string): void {
+  const font = resolveFontResource(id);
+  if (font.id !== id) throw new Error('Missing font: ' + id);
+  const store = fontStore();
+  store.fonts ??= [];
+  if (!store.fonts.some((f: BBTextFontResource) => f.hash === font.hash))
+    store.fonts.push({ ...font });
 }

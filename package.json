@@ -1,13 +1,16 @@
 {
   "name": "blockbench-bbmodel-text",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Semantic editable text components for Blockbench .bbmodel files",
   "main": "dist/bbmodel-text-component.js",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
-    "test": "node tests/layout.test.cjs && node tests/rotation.test.cjs && node tests/style.test.cjs && node tests/i18n.test.cjs && node tests/text-element-contract.test.cjs && node tests/plugin-id.test.cjs",
-    "typecheck": "tsc --noEmit"
+    "test": "node tests/layout.test.cjs && node tests/rotation.test.cjs && node tests/style.test.cjs && node tests/i18n.test.cjs && node tests/text-element-contract.test.cjs && node tests/plugin-id.test.cjs && node tests/model.test.cjs && node tests/font-resources.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "test:host": "playwright test",
+    "format:check": "prettier --check src tests scripts docs README.md playwright.config.cjs",
+    "check": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
     "blockbench",
@@ -19,8 +22,10 @@
   "author": "EaseCation",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@types/node": "^22.13.14",
     "blockbench-types": "^5.0.0",
+    "prettier": "3.5.3",
     "ts-loader": "^9.5.1",
     "typescript": "^5.4.5",
     "webpack": "^5.91.0",

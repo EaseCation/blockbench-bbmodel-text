@@ -21,18 +21,23 @@ function createMeasurer(family: string, element: BBTextElement): TextMeasurer {
   };
 }
 
-export async function renderTextCanvas(element: BBTextElement): Promise<{ canvas: HTMLCanvasElement; layout: TextLayoutResult; family: string }> {
+export async function renderTextCanvas(
+  element: BBTextElement,
+): Promise<{ canvas: HTMLCanvasElement; layout: TextLayoutResult; family: string }> {
   const family = await loadFontFamily(element.font_id);
   const measurer = createMeasurer(family, element);
-  const layout = layoutText({
-    text: element.text,
-    fontSize: effectiveFontSize(element.font_size),
-    lineHeight: element.line_height,
-    letterSpacing: element.letter_spacing,
-    layoutMode: element.layout_mode,
-    boxWidth: element.box_width,
-    align: element.align,
-  }, measurer);
+  const layout = layoutText(
+    {
+      text: element.text,
+      fontSize: effectiveFontSize(element.font_size),
+      lineHeight: element.line_height,
+      letterSpacing: element.letter_spacing,
+      layoutMode: element.layout_mode,
+      boxWidth: element.box_width,
+      align: element.align,
+    },
+    measurer,
+  );
 
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.ceil(layout.width * RENDER_SCALE));
@@ -66,18 +71,8 @@ export async function renderTextCanvas(element: BBTextElement): Promise<{ canvas
 export function setPlaneGeometry(mesh: any, width: number, height: number): void {
   const w = Math.max(0.01, width) / 2;
   const h = Math.max(0.01, height) / 2;
-  const positions = new Float32Array([
-    -w, h, 0,
-    w, h, 0,
-    w, -h, 0,
-    -w, -h, 0,
-  ]);
-  const uvs = new Float32Array([
-    0, 1,
-    1, 1,
-    1, 0,
-    0, 0,
-  ]);
+  const positions = new Float32Array([-w, h, 0, w, h, 0, w, -h, 0, -w, -h, 0]);
+  const uvs = new Float32Array([0, 1, 1, 1, 1, 0, 0, 0]);
   const indices = [0, 1, 2, 0, 2, 3];
   mesh.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   mesh.geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
@@ -86,11 +81,37 @@ export function setPlaneGeometry(mesh: any, width: number, height: number): void
   mesh.geometry.computeBoundingSphere();
 
   if (mesh.outline?.geometry) {
-    mesh.outline.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-      -w, h, 0, w, h, 0,
-      w, h, 0, w, -h, 0,
-      w, -h, 0, -w, -h, 0,
-      -w, -h, 0, -w, h, 0,
-    ]), 3));
+    mesh.outline.geometry.setAttribute(
+      'position',
+      new THREE.BufferAttribute(
+        new Float32Array([
+          -w,
+          h,
+          0,
+          w,
+          h,
+          0,
+          w,
+          h,
+          0,
+          w,
+          -h,
+          0,
+          w,
+          -h,
+          0,
+          -w,
+          -h,
+          0,
+          -w,
+          -h,
+          0,
+          -w,
+          h,
+          0,
+        ]),
+        3,
+      ),
+    );
   }
 }

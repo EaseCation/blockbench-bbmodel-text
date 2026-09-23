@@ -5,7 +5,9 @@ export const DEFAULT_TEXT_COLOR = '#ffffff';
 
 export function effectiveFontSize(fontScale: unknown): number {
   const scale = Number(fontScale);
-  return TEXT_BASE_FONT_SIZE * Math.max(0.01, Number.isFinite(scale) ? scale : DEFAULT_TEXT_FONT_SCALE);
+  return (
+    TEXT_BASE_FONT_SIZE * Math.max(0.01, Number.isFinite(scale) ? scale : DEFAULT_TEXT_FONT_SCALE)
+  );
 }
 
 export function normalizeFontScale(value: unknown, fallback = DEFAULT_TEXT_FONT_SCALE): number {

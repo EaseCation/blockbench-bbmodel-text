@@ -36,4 +36,8 @@ declare function getCurrentGroup(): any;
 declare function guid(): string;
 declare function pathToExtension(path: string): string;
 declare function updateSelection(): void;
-declare function tl(key: string, variables?: string | number | (string | number)[], fallback?: string): string;
+declare function tl(
+  key: string,
+  variables?: string | number | (string | number)[],
+  fallback?: string,
+): string;

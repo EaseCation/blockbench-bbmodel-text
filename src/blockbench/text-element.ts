@@ -1,7 +1,13 @@
 import { getFontOptions, refreshFontSelectOptions } from './font-registry';
 import { renderTextCanvas, setPlaneGeometry } from './renderer';
 import { DEFAULT_TEXT_ROTATION } from '../core/rotation';
-import { DEFAULT_TEXT_COLOR, DEFAULT_TEXT_CONTENT, DEFAULT_TEXT_FONT_SCALE, normalizeColorValue, normalizeFontScale } from '../core/style';
+import {
+  DEFAULT_TEXT_COLOR,
+  DEFAULT_TEXT_CONTENT,
+  DEFAULT_TEXT_FONT_SCALE,
+  normalizeColorValue,
+  normalizeFontScale,
+} from '../core/style';
 import { t } from './i18n';
 
 export type BBTextLayoutMode = 'auto_width' | 'fixed_width';
@@ -82,9 +88,12 @@ export class BBTextElement extends (OutlinerElement as any) {
   }
 
   moveVector(offset: [number, number, number] | any, axis?: number, update = true): void {
-    const vector = typeof offset === 'number'
-      ? [(axis ?? 0) === 0 ? offset : 0, axis === 1 ? offset : 0, axis === 2 ? offset : 0]
-      : (offset.toArray ? offset.toArray() : offset);
+    const vector =
+      typeof offset === 'number'
+        ? [(axis ?? 0) === 0 ? offset : 0, axis === 1 ? offset : 0, axis === 2 ? offset : 0]
+        : offset.toArray
+          ? offset.toArray()
+          : offset;
     this.origin[0] += vector[0] || 0;
     this.origin[1] += vector[1] || 0;
     this.origin[2] += vector[2] || 0;
@@ -134,7 +143,13 @@ function makePropertyDefinitions(): any[] {
       onChange: onTextPropertyChanged,
     },
     font_size: {
-      input: { label: 'bb_text.field.font_scale', description: t('bb_text.field.font_scale.desc'), type: 'number', min: 0.01, step: 0.05 },
+      input: {
+        label: 'bb_text.field.font_scale',
+        description: t('bb_text.field.font_scale.desc'),
+        type: 'number',
+        min: 0.01,
+        step: 0.05,
+      },
       onChange: onTextPropertyChanged,
     },
     line_height: {
@@ -149,7 +164,10 @@ function makePropertyDefinitions(): any[] {
       input: {
         label: 'bb_text.field.layout',
         type: 'select',
-        options: { auto_width: 'bb_text.option.auto_width', fixed_width: 'bb_text.option.fixed_width' },
+        options: {
+          auto_width: 'bb_text.option.auto_width',
+          fixed_width: 'bb_text.option.fixed_width',
+        },
       },
       onChange: onTextPropertyChanged,
     },
@@ -161,7 +179,11 @@ function makePropertyDefinitions(): any[] {
       input: {
         label: 'bb_text.field.align',
         type: 'inline_select',
-        options: { left: 'bb_text.option.left', center: 'bb_text.option.center', right: 'bb_text.option.right' },
+        options: {
+          left: 'bb_text.option.left',
+          center: 'bb_text.option.center',
+          right: 'bb_text.option.right',
+        },
       },
       onChange: onTextPropertyChanged,
     },
@@ -170,7 +192,14 @@ function makePropertyDefinitions(): any[] {
       onChange: onTextPropertyChanged,
     },
     opacity: {
-      input: { label: 'bb_text.field.opacity', type: 'range', min: 0, max: 1, step: 0.01, editable_range_label: true },
+      input: {
+        label: 'bb_text.field.opacity',
+        type: 'range',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        editable_range_label: true,
+      },
       onChange: onTextPropertyChanged,
     },
     origin: {
@@ -191,20 +220,61 @@ function makePropertyDefinitions(): any[] {
 
   return [
     new Property(BBTextElement, 'string', 'name', { default: DEFAULT_TEXT_CONTENT }),
-    new Property(BBTextElement, 'string', 'text', { default: DEFAULT_TEXT_CONTENT, inputs: { element_panel: inputs.text } }),
-    new Property(BBTextElement, 'string', 'font_id', { default: 'font_default_minecraft', inputs: { element_panel: inputs.font_id } }),
-    new Property(BBTextElement, 'number', 'font_size', { default: DEFAULT_TEXT_FONT_SCALE, inputs: { element_panel: inputs.font_size } }),
-    new Property(BBTextElement, 'number', 'line_height', { default: 1.2, inputs: { element_panel: inputs.line_height } }),
-    new Property(BBTextElement, 'number', 'letter_spacing', { default: 0, inputs: { element_panel: inputs.letter_spacing } }),
-    new Property(BBTextElement, 'enum', 'layout_mode', { default: 'auto_width', values: ['auto_width', 'fixed_width'], inputs: { element_panel: inputs.layout_mode } }),
-    new Property(BBTextElement, 'number', 'box_width', { default: 64, inputs: { element_panel: inputs.box_width } }),
-    new Property(BBTextElement, 'enum', 'align', { default: 'left', values: ['left', 'center', 'right'], inputs: { element_panel: inputs.align } }),
-    new Property(BBTextElement, 'string', 'color', { default: DEFAULT_TEXT_COLOR, inputs: { element_panel: inputs.color } }),
-    new Property(BBTextElement, 'number', 'opacity', { default: 1, inputs: { element_panel: inputs.opacity } }),
-    new Property(BBTextElement, 'vector', 'origin', { default: [0, 0, 0], inputs: { element_panel: inputs.origin } }),
-    new Property(BBTextElement, 'vector', 'rotation', { default: DEFAULT_TEXT_ROTATION, inputs: { element_panel: inputs.rotation } }),
+    new Property(BBTextElement, 'string', 'text', {
+      default: DEFAULT_TEXT_CONTENT,
+      inputs: { element_panel: inputs.text },
+    }),
+    new Property(BBTextElement, 'string', 'font_id', {
+      default: 'font_default_minecraft',
+      inputs: { element_panel: inputs.font_id },
+    }),
+    new Property(BBTextElement, 'number', 'font_size', {
+      default: DEFAULT_TEXT_FONT_SCALE,
+      inputs: { element_panel: inputs.font_size },
+    }),
+    new Property(BBTextElement, 'number', 'line_height', {
+      default: 1.2,
+      inputs: { element_panel: inputs.line_height },
+    }),
+    new Property(BBTextElement, 'number', 'letter_spacing', {
+      default: 0,
+      inputs: { element_panel: inputs.letter_spacing },
+    }),
+    new Property(BBTextElement, 'enum', 'layout_mode', {
+      default: 'auto_width',
+      values: ['auto_width', 'fixed_width'],
+      inputs: { element_panel: inputs.layout_mode },
+    }),
+    new Property(BBTextElement, 'number', 'box_width', {
+      default: 64,
+      inputs: { element_panel: inputs.box_width },
+    }),
+    new Property(BBTextElement, 'enum', 'align', {
+      default: 'left',
+      values: ['left', 'center', 'right'],
+      inputs: { element_panel: inputs.align },
+    }),
+    new Property(BBTextElement, 'string', 'color', {
+      default: DEFAULT_TEXT_COLOR,
+      inputs: { element_panel: inputs.color },
+    }),
+    new Property(BBTextElement, 'number', 'opacity', {
+      default: 1,
+      inputs: { element_panel: inputs.opacity },
+    }),
+    new Property(BBTextElement, 'vector', 'origin', {
+      default: [0, 0, 0],
+      inputs: { element_panel: inputs.origin },
+    }),
+    new Property(BBTextElement, 'vector', 'rotation', {
+      default: DEFAULT_TEXT_ROTATION,
+      inputs: { element_panel: inputs.rotation },
+    }),
     new Property(BBTextElement, 'vector2', 'computed_size', { default: [1, 1] }),
-    new Property(BBTextElement, 'boolean', 'visibility', { default: true, inputs: { element_panel: inputs.visibility } }),
+    new Property(BBTextElement, 'boolean', 'visibility', {
+      default: true,
+      inputs: { element_panel: inputs.visibility },
+    }),
     new Property(BBTextElement, 'boolean', 'locked', { default: false }),
   ];
 }
@@ -238,7 +308,14 @@ export function registerTextElement(): void {
     Outliner.buttons.visibility,
   ];
 
-  OutlinerElement.registerType(BBTextElement, 'bb_text');
+  // The host defines non-configurable static accessors on first registration.
+  if (Object.getOwnPropertyDescriptor(BBTextElement, 'all')) {
+    OutlinerElement.types.bb_text = BBTextElement;
+    Blockbench.dispatchEvent('register_element_type', {
+      id: 'bb_text',
+      constructor: BBTextElement,
+    });
+  } else OutlinerElement.registerType(BBTextElement, 'bb_text');
   (globalThis as any).BBTextElement = BBTextElement;
 
   new NodePreviewController(BBTextElement, {
@@ -297,31 +374,34 @@ export function updateTextElementPreview(element: BBTextElement): void {
   const version = (element.__bb_text_render_version || 0) + 1;
   element.__bb_text_render_version = version;
 
-  renderTextCanvas(element).then(({ canvas, layout }) => {
-    if (element.__bb_text_render_version !== version || !element.mesh) return;
-    element.computed_size = [layout.width, layout.height];
-    setPlaneGeometry(element.mesh, layout.width, layout.height);
+  renderTextCanvas(element)
+    .then(({ canvas, layout }) => {
+      if (element.__bb_text_render_version !== version || !element.mesh) return;
+      element.computed_size = [layout.width, layout.height];
+      setPlaneGeometry(element.mesh, layout.width, layout.height);
 
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    if ('colorSpace' in texture && THREE.SRGBColorSpace) texture.colorSpace = THREE.SRGBColorSpace;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      if ('colorSpace' in texture && THREE.SRGBColorSpace)
+        texture.colorSpace = THREE.SRGBColorSpace;
 
-    const oldMaterial = element.mesh.material;
-    const oldMap = oldMaterial?.map;
-    element.mesh.material = new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      side: THREE.DoubleSide,
-      alphaTest: 0.01,
-      depthWrite: false,
+      const oldMaterial = element.mesh.material;
+      const oldMap = oldMaterial?.map;
+      element.mesh.material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+        alphaTest: 0.01,
+        depthWrite: false,
+      });
+      oldMap?.dispose?.();
+      oldMaterial?.dispose?.();
+      element.mesh.visible = element.visibility;
+    })
+    .catch((error) => {
+      console.warn('[BBText] Failed to render text element', error);
     });
-    oldMap?.dispose?.();
-    oldMaterial?.dispose?.();
-    element.mesh.visible = element.visibility;
-  }).catch(error => {
-    console.warn('[BBText] Failed to render text element', error);
-  });
 }
 
 export function updateTextElementTransform(element: BBTextElement): void {

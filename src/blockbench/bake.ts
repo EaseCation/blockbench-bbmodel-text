@@ -4,7 +4,11 @@ import { t } from './i18n';
 import { DEFAULT_TEXT_CONTENT } from '../core/style';
 
 function safeName(name: string): string {
-  return String(name || 'text').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'text';
+  return (
+    String(name || 'text')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'text'
+  );
 }
 
 function createTextureFromCanvas(element: BBTextElement, canvas: HTMLCanvasElement): any {
@@ -20,7 +24,12 @@ function createTextureFromCanvas(element: BBTextElement, canvas: HTMLCanvasEleme
   return texture;
 }
 
-function createBakedMesh(element: BBTextElement, texture: any, textureWidth: number, textureHeight: number): any {
+function createBakedMesh(
+  element: BBTextElement,
+  texture: any,
+  textureWidth: number,
+  textureHeight: number,
+): any {
   const [width, height] = element.computed_size;
   const halfW = Math.max(0.01, width) / 2;
   const halfH = Math.max(0.01, height) / 2;
@@ -51,7 +60,12 @@ function createBakedMesh(element: BBTextElement, texture: any, textureWidth: num
   return mesh;
 }
 
-function createBakedCube(element: BBTextElement, texture: any, textureWidth: number, textureHeight: number): any {
+function createBakedCube(
+  element: BBTextElement,
+  texture: any,
+  textureWidth: number,
+  textureHeight: number,
+): any {
   const [width, height] = element.computed_size;
   const halfW = Math.max(0.01, width) / 2;
   const halfH = Math.max(0.01, height) / 2;
@@ -85,12 +99,17 @@ export async function bakeTextElement(element: BBTextElement): Promise<void> {
   Undo.initEdit({ outliner: true, elements, textures, selection: true });
   const texture = createTextureFromCanvas(element, canvas);
   textures.push(texture);
-  const baked = Format?.meshes && typeof Mesh !== 'undefined'
-    ? createBakedMesh(element, texture, canvas.width, canvas.height)
-    : createBakedCube(element, texture, canvas.width, canvas.height);
+  const baked =
+    Format?.meshes && typeof Mesh !== 'undefined'
+      ? createBakedMesh(element, texture, canvas.width, canvas.height)
+      : createBakedCube(element, texture, canvas.width, canvas.height);
   elements.push(baked);
   baked.select?.();
   Undo.finishEdit(t('bb_text.undo.bake'), { outliner: true, elements, textures, selection: true });
-  Canvas.updateView({ elements: [baked], element_aspects: { geometry: true, faces: true, transform: true }, selection: true });
+  Canvas.updateView({
+    elements: [baked],
+    element_aspects: { geometry: true, faces: true, transform: true },
+    selection: true,
+  });
   Blockbench.showQuickMessage(t('bb_text.message.baked'));
 }

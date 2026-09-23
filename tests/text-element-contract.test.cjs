@@ -3,11 +3,16 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const elementSource = fs.readFileSync(path.join(root, 'src', 'blockbench', 'text-element.ts'), 'utf8');
+const elementSource = fs.readFileSync(
+  path.join(root, 'src', 'blockbench', 'text-element.ts'),
+  'utf8',
+);
 const actionsSource = fs.readFileSync(path.join(root, 'src', 'blockbench', 'actions.ts'), 'utf8');
 
 assert(
-  /get\s+position\s*\(\)\s*:\s*\[number,\s*number,\s*number\]\s*\{\s*return this\.origin;\s*\}/m.test(elementSource),
+  /get\s+position\s*\(\)\s*:\s*\[number,\s*number,\s*number\]\s*\{\s*return this\.origin;\s*\}/m.test(
+    elementSource,
+  ),
   'BBTextElement must expose origin as position so Blockbench move/slider code edits it exactly once',
 );
 
@@ -17,12 +22,16 @@ assert(
 );
 
 assert(
-  /new Property\(BBTextElement,\s*'string',\s*'name',\s*\{\s*default:\s*DEFAULT_TEXT_CONTENT\s*\}\)/m.test(elementSource),
+  /new Property\(BBTextElement,\s*'string',\s*'name',\s*\{\s*default:\s*DEFAULT_TEXT_CONTENT\s*\}\)/m.test(
+    elementSource,
+  ),
   'default text element name must be the literal Text, not a localized string',
 );
 
 assert(
-  /new Property\(BBTextElement,\s*'string',\s*'text',\s*\{\s*default:\s*DEFAULT_TEXT_CONTENT,/m.test(elementSource),
+  /new Property\(BBTextElement,\s*'string',\s*'text',\s*\{\s*default:\s*DEFAULT_TEXT_CONTENT,/m.test(
+    elementSource,
+  ),
   'default text content must be the literal Text, not a localized string',
 );
 

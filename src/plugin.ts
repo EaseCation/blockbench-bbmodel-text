@@ -1,7 +1,19 @@
-import { getProjectFonts, registerProjectFontProperty, unregisterProjectFontProperty } from './blockbench/font-registry';
-import { registerProjectSettingsProperties, unregisterProjectSettingsProperties } from './blockbench/settings';
-import { registerTextElement, refreshAllTextElements, unregisterTextElement } from './blockbench/text-element';
-import { registerActions, unregisterActions } from './blockbench/actions';
+import {
+  getProjectFonts,
+  registerProjectFontProperty,
+  unregisterProjectFontProperty,
+} from './blockbench/font-registry';
+import {
+  registerProjectSettingsProperties,
+  unregisterProjectSettingsProperties,
+} from './blockbench/settings';
+import {
+  registerTextElement,
+  refreshAllTextElements,
+  unregisterTextElement,
+} from './blockbench/text-element';
+import { registerCarriers, unregisterCarriers } from './blockbench/carrier';
+import { registerTextUI, unregisterTextUI } from './blockbench/text-ui';
 import { registerBBTextTranslations, t } from './blockbench/i18n';
 
 const listeners: Array<{ event: string; handler: (...args: any[]) => void }> = [];
@@ -13,7 +25,9 @@ function addListener(event: string, handler: (...args: any[]) => void): void {
 
 function removeListeners(): void {
   for (const { event, handler } of listeners) {
-    try { Blockbench.removeListener?.(event, handler); } catch {}
+    try {
+      Blockbench.removeListener?.(event, handler);
+    } catch {}
   }
   listeners.length = 0;
 }
@@ -31,16 +45,17 @@ export function registerPlugin(): void {
     name: t('bb_text.plugin.title'),
     author: 'EaseCation',
     description: t('bb_text.plugin.description'),
-    version: '0.1.0',
+    version: '0.2.0',
     variant: 'both',
-    min_version: '5.0.0',
+    min_version: '5.2.1',
     tags: ['Minecraft', 'Text', 'BBModel'],
     icon: 'text_fields',
     onload() {
       registerProjectFontProperty();
       registerProjectSettingsProperties();
       registerTextElement();
-      registerActions();
+      registerCarriers();
+      registerTextUI();
       addListener('setup_project', syncProjectFontsAndPreview);
       addListener('load_project', syncProjectFontsAndPreview);
       addListener('select_project', syncProjectFontsAndPreview);
@@ -48,7 +63,8 @@ export function registerPlugin(): void {
     },
     onunload() {
       removeListeners();
-      unregisterActions();
+      unregisterTextUI();
+      unregisterCarriers();
       unregisterTextElement();
       unregisterProjectSettingsProperties();
       unregisterProjectFontProperty();

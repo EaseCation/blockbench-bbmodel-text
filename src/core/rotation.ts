@@ -26,7 +26,10 @@ export function normalizeQuarterTurn(value: unknown, fallback: QuarterTurn = 0):
   return normalized as QuarterTurn;
 }
 
-export function sanitizeRotation(value: unknown, fallback: RotationTuple = DEFAULT_TEXT_ROTATION): RotationTuple {
+export function sanitizeRotation(
+  value: unknown,
+  fallback: RotationTuple = DEFAULT_TEXT_ROTATION,
+): RotationTuple {
   const source = Array.isArray(value) ? value : fallback;
   return [0, 1, 2].map((index) => {
     if (source[index] === null || source[index] === '') return fallback[index];
@@ -46,7 +49,10 @@ export function rotationForFacing(axis: unknown, quarterTurn: unknown): Rotation
   ];
 }
 
-export function presetFromRotation(rotation: unknown): { axis: TextFacingAxis; quarterTurn: QuarterTurn } {
+export function presetFromRotation(rotation: unknown): {
+  axis: TextFacingAxis;
+  quarterTurn: QuarterTurn;
+} {
   const [x, y, z] = sanitizeRotation(rotation);
   for (const axis of Object.keys(BASE_ROTATIONS) as TextFacingAxis[]) {
     const base = BASE_ROTATIONS[axis];

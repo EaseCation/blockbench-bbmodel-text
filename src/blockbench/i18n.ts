@@ -2,7 +2,8 @@ type TranslationMap = Record<string, string>;
 
 const EN: TranslationMap = {
   'bb_text.plugin.title': 'BBModel Text Component',
-  'bb_text.plugin.description': 'Adds semantic editable text elements to Blockbench .bbmodel projects, with embedded TTF/OTF fonts and baking support.',
+  'bb_text.plugin.description':
+    'Adds semantic editable text elements to Blockbench .bbmodel projects, with embedded TTF/OTF fonts and baking support.',
   'bb_text.data.text': 'Text',
   'bb_text.data.text_baked': '%0 Baked',
   'bb_text.action.add': 'Add Text',
@@ -50,8 +51,10 @@ const EN: TranslationMap = {
   'bb_text.table.name': 'Name',
   'bb_text.table.format': 'Format',
   'bb_text.table.hash': 'Hash',
-  'bb_text.message.font_note': 'Project fonts are embedded into this .bbmodel. Imported fonts are also copied to the local global library for reuse.',
-  'bb_text.message.global_font_storage_full': 'Font embedded in project, but global library storage is full.',
+  'bb_text.message.font_note':
+    'Project fonts are embedded into this .bbmodel. Imported fonts are also copied to the local global library for reuse.',
+  'bb_text.message.global_font_storage_full':
+    'Font embedded in project, but global library storage is full.',
   'bb_text.message.imported_fonts': 'Imported %0 font(s).',
   'bb_text.message.select_text_first': 'Select a text element first.',
   'bb_text.message.baked': 'Text baked into regular geometry and texture.',
@@ -63,7 +66,8 @@ const EN: TranslationMap = {
 
 const ZH: TranslationMap = {
   'bb_text.plugin.title': 'BBModel 文字组件',
-  'bb_text.plugin.description': '为 Blockbench .bbmodel 项目添加语义化可编辑文字元素，并支持内嵌 TTF/OTF 字体与烘焙。',
+  'bb_text.plugin.description':
+    '为 Blockbench .bbmodel 项目添加语义化可编辑文字元素，并支持内嵌 TTF/OTF 字体与烘焙。',
   'bb_text.data.text': '文字',
   'bb_text.data.text_baked': '%0 烘焙',
   'bb_text.action.add': '添加文字',
@@ -111,7 +115,8 @@ const ZH: TranslationMap = {
   'bb_text.table.name': '名称',
   'bb_text.table.format': '格式',
   'bb_text.table.hash': '哈希',
-  'bb_text.message.font_note': '项目字体会内嵌保存到这个 .bbmodel 中。导入的字体也会复制到本地全局字体库，方便复用。',
+  'bb_text.message.font_note':
+    '项目字体会内嵌保存到这个 .bbmodel 中。导入的字体也会复制到本地全局字体库，方便复用。',
   'bb_text.message.global_font_storage_full': '字体已内嵌到项目中，但全局字体库存储空间不足。',
   'bb_text.message.imported_fonts': '已导入 %0 个字体。',
   'bb_text.message.select_text_first': '请先选择一个文字元素。',
@@ -124,7 +129,8 @@ const ZH: TranslationMap = {
 
 const JA: TranslationMap = {
   'bb_text.plugin.title': 'BBModel テキストコンポーネント',
-  'bb_text.plugin.description': 'Blockbench の .bbmodel プロジェクトに、編集可能なセマンティックテキスト要素、埋め込み TTF/OTF フォント、ベイク機能を追加します。',
+  'bb_text.plugin.description':
+    'Blockbench の .bbmodel プロジェクトに、編集可能なセマンティックテキスト要素、埋め込み TTF/OTF フォント、ベイク機能を追加します。',
   'bb_text.data.text': 'テキスト',
   'bb_text.data.text_baked': '%0 ベイク済み',
   'bb_text.action.add': 'テキストを追加',
@@ -134,7 +140,8 @@ const JA: TranslationMap = {
   'bb_text.action.manage_fonts': 'テキストフォント管理',
   'bb_text.action.manage_fonts.desc': 'このプロジェクトに埋め込まれたテキストフォントを表示します',
   'bb_text.action.bake': 'テキストをベイク',
-  'bb_text.action.bake.desc': '選択中のセマンティックテキストを通常のジオメトリとテクスチャにベイクします',
+  'bb_text.action.bake.desc':
+    '選択中のセマンティックテキストを通常のジオメトリとテクスチャにベイクします',
   'bb_text.dialog.edit.title': 'テキストを編集',
   'bb_text.dialog.fonts.title': 'BBModel テキストフォント',
   'bb_text.field.text': 'テキスト',
@@ -172,8 +179,10 @@ const JA: TranslationMap = {
   'bb_text.table.name': '名前',
   'bb_text.table.format': '形式',
   'bb_text.table.hash': 'ハッシュ',
-  'bb_text.message.font_note': 'プロジェクトのフォントはこの .bbmodel に埋め込まれます。読み込んだフォントは再利用できるようローカルのグローバルライブラリにもコピーされます。',
-  'bb_text.message.global_font_storage_full': 'フォントはプロジェクトに埋め込まれましたが、グローバルライブラリの保存容量が不足しています。',
+  'bb_text.message.font_note':
+    'プロジェクトのフォントはこの .bbmodel に埋め込まれます。読み込んだフォントは再利用できるようローカルのグローバルライブラリにもコピーされます。',
+  'bb_text.message.global_font_storage_full':
+    'フォントはプロジェクトに埋め込まれましたが、グローバルライブラリの保存容量が不足しています。',
   'bb_text.message.imported_fonts': '%0 個のフォントを読み込みました。',
   'bb_text.message.select_text_first': '先にテキスト要素を選択してください。',
   'bb_text.message.baked': 'テキストを通常のジオメトリとテクスチャにベイクしました。',
@@ -197,7 +206,11 @@ export function registerBBTextTranslations(): void {
   }
 }
 
-export function t(key: string, variables?: string | number | (string | number)[], fallback?: string): string {
+export function t(
+  key: string,
+  variables?: string | number | (string | number)[],
+  fallback?: string,
+): string {
   if (typeof tl === 'function') return tl(key, variables, fallback);
   return fallback || EN[key] || key;
 }

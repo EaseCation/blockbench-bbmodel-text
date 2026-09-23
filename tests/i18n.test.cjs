@@ -11,18 +11,26 @@ const transpiled = ts.transpileModule(source, {
   fileName: sourcePath,
 });
 const moduleContext = { exports: {} };
-vm.runInNewContext(transpiled.outputText, {
-  module: moduleContext,
-  exports: moduleContext.exports,
-  require,
-  console,
-}, { filename: sourcePath });
+vm.runInNewContext(
+  transpiled.outputText,
+  {
+    module: moduleContext,
+    exports: moduleContext.exports,
+    require,
+    console,
+  },
+  { filename: sourcePath },
+);
 
 const { BB_TEXT_TRANSLATIONS, t } = moduleContext.exports;
 const englishKeys = Object.keys(BB_TEXT_TRANSLATIONS.en).sort();
 
 for (const language of ['zh', 'ja']) {
-  assert.deepStrictEqual(Object.keys(BB_TEXT_TRANSLATIONS[language]).sort(), englishKeys, `${language} keys must match English`);
+  assert.deepStrictEqual(
+    Object.keys(BB_TEXT_TRANSLATIONS[language]).sort(),
+    englishKeys,
+    `${language} keys must match English`,
+  );
 }
 
 assert.strictEqual(BB_TEXT_TRANSLATIONS.zh_tw, BB_TEXT_TRANSLATIONS.zh);

@@ -7,9 +7,14 @@ let projectDefaultRotationProperty: any | undefined;
 export function registerProjectSettingsProperties(): void {
   if (typeof ModelProject === 'undefined') return;
   if (!ModelProject.properties?.bb_text_default_rotation_v2) {
-    projectDefaultRotationProperty = new Property(ModelProject, 'vector', 'bb_text_default_rotation_v2', {
-      default: DEFAULT_TEXT_ROTATION,
-    });
+    projectDefaultRotationProperty = new Property(
+      ModelProject,
+      'vector',
+      'bb_text_default_rotation_v2',
+      {
+        default: DEFAULT_TEXT_ROTATION,
+      },
+    );
   }
 }
 
@@ -21,7 +26,9 @@ export function unregisterProjectSettingsProperties(): void {
 function getStoredGlobalRotation(): RotationTuple {
   try {
     const raw = localStorage.getItem(GLOBAL_DEFAULT_ROTATION_KEY);
-    return raw ? sanitizeRotation(JSON.parse(raw)) : DEFAULT_TEXT_ROTATION.slice() as RotationTuple;
+    return raw
+      ? sanitizeRotation(JSON.parse(raw))
+      : (DEFAULT_TEXT_ROTATION.slice() as RotationTuple);
   } catch {
     return DEFAULT_TEXT_ROTATION.slice() as RotationTuple;
   }
@@ -39,7 +46,10 @@ export function setTextDefaultRotation(rotation: unknown): RotationTuple {
   const sanitized = sanitizeRotation(rotation);
   if (Project) {
     const project = Project as any;
-    if (Array.isArray(project.bb_text_default_rotation_v2) && typeof project.bb_text_default_rotation_v2.replace === 'function') {
+    if (
+      Array.isArray(project.bb_text_default_rotation_v2) &&
+      typeof project.bb_text_default_rotation_v2.replace === 'function'
+    ) {
       project.bb_text_default_rotation_v2.replace(sanitized);
     } else {
       project.bb_text_default_rotation_v2 = sanitized.slice();

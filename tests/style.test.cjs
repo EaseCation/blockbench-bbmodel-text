@@ -11,12 +11,16 @@ const transpiled = ts.transpileModule(source, {
   fileName: sourcePath,
 });
 const moduleContext = { exports: {} };
-vm.runInNewContext(transpiled.outputText, {
-  module: moduleContext,
-  exports: moduleContext.exports,
-  require,
-  console,
-}, { filename: sourcePath });
+vm.runInNewContext(
+  transpiled.outputText,
+  {
+    module: moduleContext,
+    exports: moduleContext.exports,
+    require,
+    console,
+  },
+  { filename: sourcePath },
+);
 
 const {
   DEFAULT_TEXT_COLOR,
