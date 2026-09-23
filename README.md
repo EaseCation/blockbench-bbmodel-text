@@ -1,4 +1,4 @@
-# BBModel Text Component v0.2.0
+# BBModel Text Component v0.2.1
 
 为 Blockbench 5.2.1+ 的 Generic Model / `.bbmodel` 创建可编辑文字。新文字始终使用普通零厚度 Cube 和内嵌 PNG；没有安装插件，也能查看、截图和保存成品。
 
@@ -6,9 +6,9 @@
 
 通过「文件 → 插件 → 从文件加载」选择 `dist/bbmodel-text-component.js`。
 
-插件可以独立使用。与支持 **Content API 1** 的 MC UI Studio 整合构建同时安装时，文字使用 UI Studio 的 Group＋内容 Cube，并参与 Image 嵌套、Frame / Stack、百分比尺寸、Fill / Hug、视口拖放和统一撤销。两种加载顺序均支持。
+插件可以独立使用。与支持 **Content API 1** 的 [UI Studio](https://github.com/EaseCation/blockbench-ui-studio)同时安装时，文字使用 UI Studio 的 Group＋内容 Cube，并参与 Image 嵌套、Frame / Stack、百分比尺寸、Fill / Hug、视口拖放和统一撤销。两种加载顺序均支持。
 
-旧版 UI Studio 没有此接口，只能使用独立文字功能；完整 UI 协作请安装随本次整合包提供的两个 JS。公开的 GitHub Pages 稳定地址仍由仓库发布流程管理，本次本地构建不自动发布。
+建议配套 UI Studio 0.8.2 或更新版本，以包含复杂项目的编辑性能修复。两个插件分别构建、加载；未提供 Content API 1 的旧版 UI Studio 只能使用独立文字功能。
 
 ## 使用
 
@@ -35,10 +35,11 @@ UI Studio 文档只保存内容提供者标识、成品来源及逻辑尺寸。�
 ## 开发与验证
 
 ```sh
-npm install
-npm run check
-npm run test:host
+npm ci
+npm run build        # 生成 dist/bbmodel-text-component.js
+npm run check        # 类型、单元测试与构建
 npm run format:check
+MCUI_DIR=../blockbench-ui-studio npm run test:host
 ```
 
 宿主测试使用隔离的 Blockbench Web 副本，默认位于相邻 UI Studio 仓库 `.cache/blockbench`；用 `BLOCKBENCH_HOST_DIR` 指定其他副本。`MCUI_DIR` 指定 UI Studio 仓库以读取其构建产物。文字测试独占 `127.0.0.1:4181`，与 UI Studio 的测试端口分离。先构建两个插件再运行联动测试。
