@@ -13,6 +13,12 @@ async function plugin(page, id, bundle) {
   await page.addScriptTag({ content: bundle });
 }
 async function start(page, order = ['text']) {
+  await page.route(/^https:\/\/web\.blockbench\.net\/content\/news\.json(?:\?.*)?$/, (r) =>
+    r.fulfill({ json: {} }),
+  );
+  await page.route(/^https:\/\/blckbn\.ch\/api\/stats\/plugins(?:\?.*)?$/, (r) =>
+    r.fulfill({ json: {} }),
+  );
   page.on('pageerror', (e) => console.log('HOST ERROR:', e.message));
   await page.route(/https:\/\/(cdn.jsdelivr.net|blckbn.ch).*plugins.*json/, (r) =>
     r.fulfill({ json: {} }),
@@ -257,6 +263,8 @@ test('duplicate, rasterize, restore and Undo preserve independent text', async (
       ),
     )
     .toBe('paint');
+  // History metadata appears before asynchronous source/font preparation completes.
+  await page.waitForFunction(() => !Blockbench.mcuiStudio.getStudio().state.busy);
   await page.evaluate((id) => Blockbench.mcuiStudio.getStudio().restoreSource(id), ids.copy);
   expect(
     await page.evaluate((id) => Blockbench.mcuiStudio.contents.inspect(id).data.text, ids.copy),
