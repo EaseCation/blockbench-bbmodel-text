@@ -45,3 +45,5 @@ MCUI_DIR=../blockbench-ui-studio npm run test:host
 宿主测试使用隔离的 Blockbench Web 副本，默认位于相邻 UI Studio 仓库 `.cache/blockbench`；用 `BLOCKBENCH_HOST_DIR` 指定其他副本。`MCUI_DIR` 指定 UI Studio 仓库以读取其构建产物。文字测试独占 `127.0.0.1:4181`，与 UI Studio 的测试端口分离。先构建两个插件再运行联动测试。
 
 默认字体来自 IdreesInc/Minecraft-Font，遵循 OFL；参见 `THIRD_PARTY_LICENSES.md`。插件遵循 MIT License。
+
+文字插件可以独立运行，不要求安装 UI Studio。宿主回归可用 `BLOCKBENCH_HOST_DIR` 指定独立的 Blockbench Web 构建；缺少可选 UI Studio 构建时，仅相关集成用例跳过，独立文字与普通建模用例仍可运行。

@@ -26,6 +26,9 @@ function load(file) {
 }
 (async () => {
   const fonts = load(path.resolve('src/blockbench/font-registry.ts'));
+  assert.equal(fonts.getProjectFonts().length, 1);
+  fonts.resolveFontResource(fonts.DEFAULT_FONT.id);
+  assert.deepEqual(project.unhandled_root_fields, {});
   const bytes = Buffer.from(fonts.DEFAULT_FONT.data_url.split(',')[1], 'base64');
   const content = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const first = await fonts.createFontFromFile({ name: 'renamed.otf', content });

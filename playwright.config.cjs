@@ -9,12 +9,19 @@ module.exports = defineConfig({
     channel: 'chrome',
     headless: true,
     viewport: { width: 1440, height: 1000 },
-    launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] },
+    launchOptions: {
+      args: [
+        `--use-angle=${process.env.BLOCKBENCH_TEST_ANGLE ?? 'swiftshader'}`,
+        '--enable-unsafe-swiftshader',
+      ],
+    },
     screenshot: 'only-on-failure',
   },
   webServer: {
     command: 'node scripts/serve-host.mjs',
-    env: { BLOCKBENCH_HOST_DIR: path.join(mcui, '.cache/blockbench') },
+    env: {
+      BLOCKBENCH_HOST_DIR: process.env.BLOCKBENCH_HOST_DIR || path.join(mcui, '.cache/blockbench'),
+    },
     url: 'http://127.0.0.1:4181',
     reuseExistingServer: false,
     timeout: 30000,

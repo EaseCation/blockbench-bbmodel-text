@@ -37,3 +37,13 @@ Text layout caches use the actual loaded font family (including content hash), f
 Font preparation/readiness resolves the current project's font resource and uses its hash, so replacing a font or changing project cannot reuse another font merely because its ID matches. Embedded fonts are resolved before the global library, whose parsed JSON is reused only while the stored string matches. Runtime FontFace names include the content hash.
 
 Native fingerprints retain exactly the prior serialization/hash algorithm. A WeakMap caches only the last geometry and PNG input per Cube; changed geometry/pixels recompute. Integration sealing uses the host UUID registry rather than scanning every Cube. No new persisted fields or Content API version are required.
+
+## Native edit coordination and ordinary modeling isolation (0.2.3)
+
+`blockbench/native-edits` is the single owner of native Undo participation. It receives participant descriptors (native element and owned textures), a delegation predicate and synchronous content derivation. `carrier` supplies these descriptions and content behavior; it never rewrites native edit aspects.
+
+Each native save is associated with its originating project through a WeakMap. At `init_edit`, only existing standalone text participants and their owned textures supplement the BEFORE snapshot. At `finish_edit`, only tracked carriers, newly added carriers, or elements already covered by the host snapshot may derive content. The host's subsequent `create_undo_save` supplements AFTER, retaining surviving prior participants and excluding removed ones. The same snapshot path covers the reference snapshot used by `cancelEdit(true)`, without running content derivation. Native aspect objects and arrays remain host-owned, including arrays to which duplication/paste commands append after initialization.
+
+A project without text adds no element, texture or outliner scope. Mixed native models capture the host's original participants plus text; unrelated Cube/Mesh elements and textures are not added. First-paste additions use empty BEFORE maps so Undo removes their generated resources. Deleting the last text still has a tracked BEFORE scope and therefore does not erase unrelated native elements. Resource snapshots preserve both existence and absence; reading fonts no longer creates project metadata. Only explicit font embedding/import persists fonts.
+
+UI Studio projects delegate native geometry and history to Content API 1. Standalone operation uses this coordinator with no UI Studio dependency. Project identity checks, weak transaction storage and hook disposal prevent state from crossing projects or unload. No native prototype or upstream code is modified.

@@ -1,3 +1,13 @@
+# Native modeling regression and transaction isolation (0.2.3)
+
+1. Reproduce partial native edits under vanilla, UI-only, text-only and combined plugin environments.
+2. Centralize participant ownership, BEFORE/AFTER resource snapshots and native cancellation in a dedicated native edit coordinator; preserve host-owned aspect arrays.
+3. Make font queries read-only. Ordinary models must not acquire text resources merely through load, selection or history.
+4. Exercise ordinary Cube/Group/Mesh operations, textures, mixed standalone text, first paste, last-text deletion, project switching, unloading and both plugin load orders in isolated hosts.
+5. Run type/unit/build and host suites, record the pre-fix failure and resulting coverage, and update the original local JS output.
+
+---
+
 # Portable text and UI Studio integration
 
 1. Replace newly authored semantic nodes with standard zero-thickness Cube/Texture carriers; retain legacy nodes only for reversible conversion.

@@ -59,13 +59,9 @@ export function fontStore(project = Project): any {
 }
 export function getProjectFonts(): BBTextFontResource[] {
   if (!Project) return [DEFAULT_FONT];
-  const store = fontStore();
-  store.fonts = uniqueFonts([
-    ...(store.fonts || []),
-    ...(Project.bb_text_fonts || []),
-    DEFAULT_FONT,
-  ]);
-  return store.fonts;
+  // Font discovery is read-only; persistence belongs to embedFont/setProjectFonts.
+  const store = Project.unhandled_root_fields?.bb_text;
+  return uniqueFonts([...(store?.fonts || []), ...(Project.bb_text_fonts || []), DEFAULT_FONT]);
 }
 
 export function setProjectFonts(fonts: BBTextFontResource[]): void {

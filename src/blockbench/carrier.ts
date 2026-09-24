@@ -1,3 +1,4 @@
+import { installNativeEdits } from './native-edits';
 import { textData, hash, type TextData } from '../core/model';
 import { fontStore, getProjectFonts, resolveFontResource, embedFont } from './font-registry';
 import {
@@ -136,7 +137,7 @@ export function capture() {
   }
 }
 export function syncRecovery(stamp = false, project = Project) {
-  if (!project) return;
+  if (!project || (!project.unhandled_root_fields?.bb_text && !cubes(project).length)) return;
   const store = fontStore(project);
   store.entries ??= {};
   const existing = new Set(project.elements.map((e: any) => e.uuid));
@@ -163,6 +164,10 @@ export function syncRecovery(stamp = false, project = Project) {
 export async function restore() {
   const project = Project;
   if (!project) return;
+  if (!project.unhandled_root_fields?.bb_text && !cubes(project).length) {
+    capture();
+    return;
+  }
   getProjectFonts();
   const entries = fontStore(project).entries || {};
   for (const cube of project.elements) {
@@ -312,6 +317,65 @@ export function rasterize(cube: any) {
 export function nativeEditing(value: boolean) {
   applying = value;
 }
+/** Content derivation only. The native-edit coordinator owns snapshot scope. */
+function reconcileNativeCarriers(elements: any[]) {
+  applying = true;
+  try {
+    for (const cube of elements) {
+      const before = snapshots.get(cube.uuid),
+        d = textData(cube.bb_text);
+      if (d.suspended) continue;
+      if (!before) {
+        if (readyText(d)) applyText(cube, d, true);
+        else {
+          const pixels = cube.bb_text_transfer?.pixels;
+          if (pixels) {
+            const texture = new Texture({ name: cube.name + '.png', internal: true }).add(false);
+            writePixels(texture, { ...pixels, data: new Uint8ClampedArray(pixels.data) });
+            cube.faces[d.plane].texture = texture.uuid;
+            cube.bb_text.fingerprint = fingerprint(cube);
+            Canvas.updateView({ elements: [cube], element_aspects: { faces: true, uv: true } });
+          }
+          void prepareText(d).catch((e) => {
+            cube.bb_text.suspended = String(e);
+          });
+        }
+        continue;
+      }
+      if (!readyText(d)) continue;
+      if (before.signature === fingerprint(cube)) continue;
+      const faces = JSON.stringify(
+        Object.entries(cube.faces).map(([k, f]: [string, any]) => [k, f.texture, f.uv, f.rotation]),
+      );
+      if (before.pixel !== (textureOf(cube)?.getDataURL() || '') || before.texture !== faces) {
+        cube.bb_text.suspended = '成品贴图或 UV 已修改 / Edited pixels or UV';
+        continue;
+      }
+      const axis = d.plane === 'up' ? 2 : 1;
+      const width = cube.to[0] - cube.from[0],
+        height = cube.to[axis] - cube.from[axis];
+      if (
+        width !== before.rect[3] - before.rect[0] ||
+        height !== before.rect[axis + 3] - before.rect[axis]
+      ) {
+        if (width !== before.rect[3] - before.rect[0]) {
+          d.box_width = Math.max(1, width);
+          if (d.sizing === 'auto') d.sizing = 'height';
+        }
+        if (height !== before.rect[axis + 3] - before.rect[axis]) {
+          d.box_height = Math.max(1, height);
+          d.sizing = 'fixed';
+        }
+        if (d.resize !== 'scale') applyText(cube, d);
+        else cube.bb_text = d;
+      }
+      cube.bb_text.fingerprint = fingerprint(cube);
+    }
+    syncRecovery();
+  } finally {
+    applying = false;
+  }
+}
 export function registerCarriers() {
   properties.push(new Property(Cube, 'object', 'bb_text', { default: () => null, exposed: false }));
   properties.push(
@@ -334,90 +398,19 @@ export function registerCarriers() {
     Blockbench.on(event, fn);
     hooks.push(() => Blockbench.removeListener(event, fn));
   };
-  on('create_undo_save', ({ save }: any) => {
-    if (Project) save.bb_text_resources = clone(fontStore());
-  });
-  on('load_undo_save', ({ save }: any) => {
-    if (Project && save.bb_text_resources)
-      Project.unhandled_root_fields.bb_text = clone(save.bb_text_resources);
-  });
-  on('init_edit', ({ aspects: editAspects }: any) => {
-    if (applying || !Project || !cubes().length || studioApi()?.active()) return;
-    Undo.current_save?.addElements(Project.elements);
-    Undo.current_save.textures ??= {};
-    for (const t of Project.textures) Undo.current_save.textures[t.uuid] ??= t.getUndoCopy(true);
-    Object.assign(editAspects, { textures: [...Project.textures], bitmap: true });
-  });
-  on('finish_edit', ({ aspects: editAspects }: any) => {
-    if (applying || !Project) return;
-    applying = true;
-    try {
-      for (const cube of cubes()) {
-        if (managed(cube)) continue;
-        const before = snapshots.get(cube.uuid),
-          d = textData(cube.bb_text);
-        if (d.suspended) continue;
-        if (!before) {
-          if (readyText(d)) applyText(cube, d, true);
-          else {
-            const pixels = cube.bb_text_transfer?.pixels;
-            if (pixels) {
-              const texture = new Texture({ name: cube.name + '.png', internal: true }).add(false);
-              writePixels(texture, { ...pixels, data: new Uint8ClampedArray(pixels.data) });
-              cube.faces[d.plane].texture = texture.uuid;
-              cube.bb_text.fingerprint = fingerprint(cube);
-              Canvas.updateView({ elements: [cube], element_aspects: { faces: true, uv: true } });
-            }
-            void prepareText(d).catch((e) => {
-              cube.bb_text.suspended = String(e);
-            });
-          }
-          continue;
-        }
-        if (!readyText(d)) continue;
-        if (before.signature === fingerprint(cube)) continue;
-        const faces = JSON.stringify(
-          Object.entries(cube.faces).map(([k, f]: [string, any]) => [
-            k,
-            f.texture,
-            f.uv,
-            f.rotation,
-          ]),
-        );
-        if (before.pixel !== (textureOf(cube)?.getDataURL() || '') || before.texture !== faces) {
-          cube.bb_text.suspended = '成品贴图或 UV 已修改 / Edited pixels or UV';
-          continue;
-        }
-        const axis = d.plane === 'up' ? 2 : 1;
-        const width = cube.to[0] - cube.from[0],
-          height = cube.to[axis] - cube.from[axis];
-        if (
-          width !== before.rect[3] - before.rect[0] ||
-          height !== before.rect[axis + 3] - before.rect[axis]
-        ) {
-          if (width !== before.rect[3] - before.rect[0]) {
-            d.box_width = Math.max(1, width);
-            if (d.sizing === 'auto') d.sizing = 'height';
-          }
-          if (height !== before.rect[axis + 3] - before.rect[axis]) {
-            d.box_height = Math.max(1, height);
-            d.sizing = 'fixed';
-          }
-          if (d.resize !== 'scale') applyText(cube, d);
-          else cube.bb_text = d;
-        }
-        cube.bb_text.fingerprint = fingerprint(cube);
-      }
-      syncRecovery();
-      Object.assign(editAspects, {
-        elements: [...Project.elements],
-        textures: [...Project.textures],
-        bitmap: true,
-      });
-    } finally {
-      applying = false;
-    }
-  });
+  hooks.push(
+    installNativeEdits({
+      delegated: () => applying || !!studioApi()?.active(),
+      participants: () =>
+        cubes()
+          .filter((cube) => !managed(cube))
+          .map((element) => ({
+            element,
+            textures: [textureOf(element)].filter(Boolean),
+          })),
+      derive: reconcileNativeCarriers,
+    }),
+  );
   on('finished_edit', () => {
     for (const cube of cubes()) {
       const owner = managed(cube);
@@ -437,7 +430,7 @@ export function registerCarriers() {
   hooks.push(() => Codecs.project.removeListener('parsed', parsed));
   const compile = ({ model }: any) => {
     syncRecovery();
-    if (Project) {
+    if (Project?.unhandled_root_fields?.bb_text) {
       model.unhandled_root_fields ??= {};
       model.unhandled_root_fields.bb_text = clone(fontStore());
       for (const e of model.elements ?? []) delete e.bb_text_transfer;

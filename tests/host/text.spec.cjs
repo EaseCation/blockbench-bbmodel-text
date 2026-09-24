@@ -2,11 +2,10 @@ const { test, expect } = require('@playwright/test');
 const fs = require('node:fs');
 const path = require('node:path');
 const textBundle = fs.readFileSync('dist/bbmodel-text-component.js', 'utf8');
-const uiBundle = fs.readFileSync(
-  path.join(process.env.MCUI_DIR || '../blockbench-mcui', 'dist/mcui_studio.js'),
-  'utf8',
-);
+const uiPath = path.join(process.env.MCUI_DIR || '../blockbench-mcui', 'dist/mcui_studio.js');
+const uiBundle = fs.existsSync(uiPath) ? fs.readFileSync(uiPath, 'utf8') : null;
 async function plugin(page, id, bundle) {
+  test.skip(!bundle, `Build the optional companion plugin: ${id}`);
   await page.evaluate((id) => {
     Plugins.registered[id] = new Blockbench.Plugin(id);
   }, id);
@@ -23,7 +22,7 @@ async function start(page, order = ['text']) {
   await page.route(/https:\/\/(cdn.jsdelivr.net|blckbn.ch).*plugins.*json/, (r) =>
     r.fulfill({ json: {} }),
   );
-  await page.goto('http://127.0.0.1:4181');
+  await page.goto('http://127.0.0.1:4181', { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!Blockbench.setup_successful);
   for (const p of order)
     await plugin(
@@ -840,4 +839,199 @@ test('text measurement cache follows width, font identity, project and library c
   expect(result.missingAfterSwitch).toBe(false);
   expect(result.fromLibrary).toBeGreaterThan(0);
   expect(result.removed).toBe(false);
+});
+
+async function ordinaryFixture(page) {
+  await page.evaluate(async () => {
+    const root = new Group({ name: 'ordinary_root' }).init();
+    const nested = new Group({ name: 'ordinary_child' }).addTo(root).init();
+    new Cube({ name: 'body', from: [0, 0, 0], to: [8, 8, 8] }).addTo(root).init();
+    new Cube({ name: 'arm', from: [8, 0, 0], to: [12, 6, 4] }).addTo(nested).init();
+    new Cube({ name: 'hand', from: [8, 6, 0], to: [12, 8, 4] }).addTo(nested).init();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 16;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#128853';
+    ctx.fillRect(0, 0, 16, 16);
+    const texture = new Texture({ name: 'ordinary.png', internal: true })
+      .fromDataURL(canvas.toDataURL())
+      .add(false);
+    await texture.img.decode();
+    for (const cube of Cube.all)
+      for (const face of Object.values(cube.faces)) face.texture = texture.uuid;
+    nested.select();
+  });
+}
+async function nativeState(page) {
+  return page.evaluate(() => {
+    const tree = (nodes) =>
+      nodes.map((n) => ({
+        id: n.uuid,
+        parent: n.parent?.uuid ?? 'root',
+        ...(n.children ? { children: tree(n.children) } : {}),
+      }));
+    return {
+      tree: tree(Outliner.root),
+      cubes: Cube.all
+        .map((c) => ({
+          id: c.uuid,
+          from: c.from,
+          to: c.to,
+          parent: c.parent?.uuid ?? 'root',
+          text: c.bb_text ?? null,
+          faces: Object.fromEntries(
+            Object.entries(c.faces).map(([k, f]) => [k, { texture: f.texture, uv: f.uv }]),
+          ),
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+      textures: Texture.all
+        .map((t) => ({ id: t.uuid, png: t.getDataURL() }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    };
+  });
+}
+async function nativeRoundtrip(page, action) {
+  const before = await nativeState(page);
+  const history = await page.evaluate(() => Undo.history.length);
+  await action();
+  const after = await nativeState(page);
+  expect(await page.evaluate(() => Undo.history.length)).toBe(history + 1);
+  await page.evaluate(() => Undo.undo());
+  expect(await nativeState(page)).toEqual(before);
+  await page.evaluate(() => Undo.redo());
+  expect(await nativeState(page)).toEqual(after);
+}
+test('standalone coordinator leaves ordinary model history untouched', async ({ page }) => {
+  await start(page, []);
+  await ordinaryFixture(page);
+  await plugin(page, 'bbmodel-text-component', textBundle);
+  for (const operation of ['move', 'rename', 'duplicate', 'delete']) {
+    await nativeRoundtrip(page, () =>
+      page.evaluate((op) => {
+        unselectAllElements();
+        Prop.active_panel = 'outliner';
+        const cube = Cube.all.find((c) => c.name === 'arm');
+        if (op === 'move') {
+          Undo.initEdit({ elements: [cube] });
+          cube.moveVector([1, 0, 0]);
+          Undo.finishEdit('Move ordinary');
+          const edit = Undo.history.at(-1);
+          if (
+            Object.keys(edit.before.elements).length !== 1 ||
+            Object.keys(edit.post.elements).length !== 1
+          )
+            throw new Error('Ordinary Undo scope expanded');
+          if (edit.before.textures || edit.post.textures)
+            throw new Error('Ordinary textures captured');
+        }
+        if (op === 'rename') {
+          const group = Group.all[0];
+          Undo.initEdit({ groups: [group] });
+          group.name = 'renamed';
+          Undo.finishEdit('Rename');
+        }
+        if (op === 'duplicate') {
+          cube.select();
+          SharedActions.run('duplicate');
+        }
+        if (op === 'delete') {
+          cube.select();
+          SharedActions.run('delete');
+        }
+      }, operation),
+    );
+  }
+  expect((await saved(page)).unhandled_root_fields?.bb_text).toBeUndefined();
+});
+test('standalone coordinator supports mixed models, cancel, last-text deletion and first paste', async ({
+  page,
+}) => {
+  await start(page, ['text']);
+  await ordinaryFixture(page);
+  const textId = await page.evaluate(() => Blockbench.bbText.create());
+  for (const operation of [
+    'move_plain',
+    'resize_text',
+    'rename_group',
+    'duplicate_text',
+    'delete_copy',
+    'delete_last',
+  ]) {
+    await nativeRoundtrip(page, () =>
+      page.evaluate(
+        ({ op, id }) => {
+          unselectAllElements();
+          Prop.active_panel = 'outliner';
+          const c = Cube.all.find((c) => c.uuid === id);
+          if (op === 'move_plain') {
+            const body = Cube.all.find((c) => c.name === 'body');
+            Undo.initEdit({ elements: [body] });
+            body.moveVector([0, 2, 0]);
+            Undo.finishEdit('Move plain beside text');
+            const edit = Undo.history.at(-1);
+            if (
+              Object.keys(edit.before.elements).length !== 2 ||
+              Object.keys(edit.post.elements).length !== 2
+            )
+              throw new Error('Captured unrelated ordinary elements');
+          }
+          if (op === 'resize_text') {
+            Undo.initEdit({ elements: [c] });
+            c.to[0] = c.from[0] + 60;
+            Undo.finishEdit('Resize text');
+          }
+          if (op === 'rename_group') {
+            const group = Group.all[0];
+            Undo.initEdit({ groups: [group] });
+            group.name = 'text_parent';
+            Undo.finishEdit('Rename parent');
+          }
+          if (op === 'duplicate_text') {
+            c.select();
+            SharedActions.run('duplicate');
+            window.nativeTextCopy = Cube.selected[0].uuid;
+          }
+          if (op === 'delete_copy') {
+            Cube.all.find((c) => c.uuid === window.nativeTextCopy).select();
+            SharedActions.run('delete');
+          }
+          if (op === 'delete_last') {
+            c.select();
+            SharedActions.run('delete');
+          }
+        },
+        { op: operation, id: textId },
+      ),
+    );
+  }
+  // Return to the last text, and carry it through the native clipboard JSON boundary.
+  await page.evaluate(() => {
+    Undo.undo();
+    const source = Cube.all.find((c) => c.bb_text?.version === 1);
+    Clipbench.setElements([source]);
+    Clipbench.groups = undefined;
+    Clipbench.elements = JSON.parse(JSON.stringify(Clipbench.elements));
+    setupProject(Formats.free);
+  });
+  await ordinaryFixture(page);
+  const targetBefore = await nativeState(page);
+  await nativeRoundtrip(page, () => page.evaluate(() => Clipbench.pasteOutliner()));
+  expect(await page.evaluate(() => Cube.all.filter((c) => c.bb_text?.version === 1).length)).toBe(
+    1,
+  );
+  expect(
+    await page.evaluate(() => Project.unhandled_root_fields.bb_text.fonts.length),
+  ).toBeGreaterThan(0);
+  await page.evaluate(() => Undo.undo());
+  expect(await nativeState(page)).toEqual(targetBefore);
+  expect((await saved(page)).unhandled_root_fields?.bb_text).toBeUndefined();
+  await page.evaluate(() => Undo.redo());
+  const beforeCancel = await nativeState(page);
+  await page.evaluate(() => {
+    const c = Cube.all.find((c) => c.bb_text?.version === 1);
+    Undo.initEdit({ elements: [c] });
+    c.to[0] += 5;
+    Undo.cancelEdit(true);
+  });
+  expect(await nativeState(page)).toEqual(beforeCancel);
 });
