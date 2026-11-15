@@ -1,9 +1,11 @@
 import { textData } from '../core/model';
 import { prepareText, standaloneSize, measureText } from './text-renderer';
-import { applyText, aspects, nativeEditing, syncRecovery, capture } from './carrier';
+import { applyText, aspects, formatBlocker, nativeEditing, syncRecovery, capture } from './carrier';
 /** The legacy class stays registered solely to read old files and undo conversion. */
 export async function convertLegacy() {
   const project = Project;
+  const blocked = formatBlocker();
+  if (blocked) throw new Error(blocked);
   const selected = (Outliner.selected || []).filter((e: any) => e.type === 'bb_text');
   const legacy = selected.length
     ? selected

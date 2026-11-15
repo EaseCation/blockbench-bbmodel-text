@@ -95,7 +95,8 @@ export function rasterText(value: TextData, size: { width: number; height: numbe
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d')!;
+  // Read back right below: a CPU-backed canvas avoids a slow GPU readback on large text.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   ctx.scale(data.density, data.density);
   ctx.font = font(data);
   ctx.textBaseline = 'top';

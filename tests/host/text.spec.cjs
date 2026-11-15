@@ -969,11 +969,14 @@ test('standalone coordinator supports mixed models, cancel, last-text deletion a
             body.moveVector([0, 2, 0]);
             Undo.finishEdit('Move plain beside text');
             const edit = Undo.history.at(-1);
+            // Untouched text is not snapshotted at all: only the moved element, no textures.
             if (
-              Object.keys(edit.before.elements).length !== 2 ||
-              Object.keys(edit.post.elements).length !== 2
+              Object.keys(edit.before.elements).length !== 1 ||
+              Object.keys(edit.post.elements).length !== 1 ||
+              Object.keys(edit.before.textures || {}).length ||
+              Object.keys(edit.post.textures || {}).length
             )
-              throw new Error('Captured unrelated ordinary elements');
+              throw new Error('Captured unrelated elements or textures');
           }
           if (op === 'resize_text') {
             Undo.initEdit({ elements: [c] });
@@ -1034,4 +1037,408 @@ test('standalone coordinator supports mixed models, cancel, last-text deletion a
     Undo.cancelEdit(true);
   });
   expect(await nativeState(page)).toEqual(beforeCancel);
+});
+const textureAudit = () => {
+  const used = new Set();
+  for (const e of Project.elements)
+    for (const f of Object.values(e.faces || {})) if (f.texture) used.add(f.texture);
+  return {
+    names: Project.textures.map((t) => t.name),
+    orphans: Project.textures.filter((t) => !used.has(t.uuid)).map((t) => t.name),
+  };
+};
+async function addTexture(page, name, color) {
+  await page.evaluate(
+    async ({ name, color }) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 16;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 16, 16);
+      const t = new Texture({ name }).fromDataURL(canvas.toDataURL()).add(false);
+      await t.img.decode();
+    },
+    { name, color },
+  );
+}
+test('native flips and rotations keep text editable in its new orientation', async ({ page }) => {
+  await start(page);
+  const update = (text) =>
+    page.evaluate(async (text) => {
+      const c = Cube.all[0];
+      await Blockbench.bbText.update(c.uuid, { ...c.bb_text, text });
+      const face = c.faces[c.bb_text.plane];
+      return {
+        plane: c.bb_text.plane,
+        uv: [...face.uv],
+        rotation: face.rotation || 0,
+        suspended: c.bb_text.suspended || null,
+      };
+    }, text);
+  const trigger = (id) =>
+    page.evaluate((id) => {
+      Cube.all[0].select();
+      BarItems[id].trigger();
+      return Cube.all[0].bb_text.suspended || null;
+    }, id);
+  await page.evaluate(() => Blockbench.bbText.create());
+  expect(await trigger('flip_x')).toBe(null);
+  const flipped = await update('MIRROR');
+  expect(flipped.suspended).toBe(null);
+  expect(flipped.uv[0]).toBeGreaterThan(flipped.uv[2]);
+  expect(await trigger('rotate_x_cw')).toBe(null);
+  const rotated = await update('SOUTH');
+  expect(rotated.plane).toBe('south');
+  expect(rotated.suspended).toBe(null);
+  expect(await trigger('rotate_y_cw')).toBe(null);
+  const turned = await update('TURNED');
+  expect(turned.suspended).toBe(null);
+  // Text width follows the face's own orientation, not a fixed world axis.
+  const size = await page.evaluate(() => {
+    const c = Cube.all[0],
+      t = Texture.all.find((t) => t.uuid === c.bb_text.texture);
+    const extent = [0, 1, 2].map((i) => Math.abs(c.to[i] - c.from[i]));
+    return { extent, w: t.width / c.bb_text.density, h: t.height / c.bb_text.density };
+  });
+  expect(size.extent.filter((v) => v > 0).sort()).toEqual([size.w, size.h].sort());
+  expect((await page.evaluate(textureAudit)).orphans).toEqual([]);
+});
+test('replaced and deleted text textures are released with Undo and never overwrite others', async ({
+  page,
+}) => {
+  await start(page);
+  await addTexture(page, 'wood', '#8a6b4a');
+  await page.evaluate(async () => {
+    await Blockbench.bbText.create();
+    new Cube({ name: 'board', from: [0, 0, 0], to: [4, 4, 4] }).addTo().init();
+  });
+  const state = () =>
+    page.evaluate(() => {
+      const c = Cube.all.find((c) => c.bb_text),
+        wood = Texture.all.find((t) => t.name === 'wood');
+      return {
+        textures: Texture.all.length,
+        suspended: !!c?.bb_text.suspended,
+        wood: wood.width + 'x' + wood.height,
+      };
+    });
+  await page.evaluate(() => {
+    selectAll();
+    Texture.all.find((t) => t.name === 'wood').apply(true);
+  });
+  expect(await state()).toEqual({ textures: 1, suspended: true, wood: '16x16' });
+  await page.evaluate(() => Undo.undo());
+  expect(await state()).toEqual({ textures: 2, suspended: false, wood: '16x16' });
+  await page.evaluate(() => Undo.redo());
+  expect(await state()).toEqual({ textures: 1, suspended: true, wood: '16x16' });
+  // Regeneration creates a new owned texture instead of writing into the applied one.
+  await page.evaluate(async () => {
+    const c = Cube.all.find((c) => c.bb_text);
+    c.select();
+    BarItems.bb_text_regenerate.trigger();
+  });
+  await expect.poll(state).toEqual({ textures: 2, suspended: false, wood: '16x16' });
+  expect((await page.evaluate(textureAudit)).orphans).toEqual([]);
+  await page.evaluate(() => {
+    Cube.all.find((c) => c.bb_text).select();
+    BarItems.duplicate.trigger();
+  });
+  expect(await page.evaluate(() => Texture.all.length)).toBe(3);
+  await page.evaluate(() => BarItems.delete.trigger());
+  expect(await page.evaluate(textureAudit)).toEqual({
+    names: ['wood', expect.stringMatching(/^Text_.*\.png$/)],
+    orphans: [],
+  });
+  await page.evaluate(() => {
+    Cube.all.find((c) => c.bb_text).select();
+    BarItems.delete.trigger();
+  });
+  expect(await page.evaluate(textureAudit)).toEqual({ names: ['wood'], orphans: [] });
+  await page.evaluate(() => Undo.undo());
+  expect((await page.evaluate(textureAudit)).names.length).toBe(2);
+});
+test('texture resize changes raster density; painted text asks before regeneration', async ({
+  page,
+}) => {
+  await start(page);
+  await page.evaluate(() => Blockbench.bbText.create());
+  const resized = await page.evaluate(async () => {
+    const c = Cube.all[0],
+      t = Texture.all.find((t) => t.uuid === c.bb_text.texture),
+      width = t.width;
+    t.select();
+    t.resizeDialog();
+    Dialog.open.setFormValues({ mode: 'scale', size: [t.width * 2, t.height * 2] });
+    Dialog.open.confirm();
+    return {
+      density: c.bb_text.density,
+      suspended: c.bb_text.suspended || null,
+      width,
+      now: t.width,
+    };
+  });
+  expect(resized.density).toBe(8);
+  expect(resized.suspended).toBe(null);
+  expect(resized.now).toBe(resized.width * 2);
+  await page.evaluate(() => {
+    const c = Cube.all[0],
+      t = Texture.all.find((t) => t.uuid === c.bb_text.texture);
+    Undo.initEdit({ textures: [t], bitmap: true });
+    t.edit((canvas) => canvas.getContext('2d').fillRect(0, 0, 4, 4), { no_undo: true });
+    Undo.finishEdit('Paint');
+  });
+  expect(await page.evaluate(() => !!Cube.all[0].bb_text.suspended)).toBe(true);
+  await page.evaluate(() => {
+    Cube.all[0].select();
+    const panel = Interface.Panels.bb_text_properties;
+    panel.form.setValues({ text: 'Repainted' }, false);
+    panel.form.updateValues({ cause: 'input' });
+  });
+  await page.locator('#message_box button').first().click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => [Cube.all[0].bb_text.text, Cube.all[0].bb_text.suspended || null]),
+    )
+    .toEqual(['Repainted', null]);
+  await page.evaluate(() => Undo.undo());
+  expect(await page.evaluate(() => !!Cube.all[0].bb_text.suspended)).toBe(true);
+});
+test('discarding, failed regeneration and rasterizing never duplicate or release user textures', async ({
+  page,
+}) => {
+  await start(page);
+  await addTexture(page, 'wood', '#8a6b4a');
+  await page.evaluate(() => Blockbench.bbText.create());
+  const audit = () =>
+    page.evaluate(() => ({
+      names: Texture.all.map((t) => t.name).sort(),
+      unique: new Set(Texture.all.map((t) => t.uuid)).size === Texture.all.length,
+      suspended: !!Cube.all[0]?.bb_text?.suspended,
+    }));
+  // The user's texture replaces the text; discarding it regenerates onto a new texture.
+  await page.evaluate(() => {
+    Cube.all[0].select();
+    Texture.all.find((t) => t.name === 'wood').apply(true);
+  });
+  expect(await audit()).toEqual({ names: ['wood'], unique: true, suspended: true });
+  await page.evaluate(() => {
+    const panel = Interface.Panels.bb_text_properties;
+    panel.form.setValues({ text: 'Discarded' }, false);
+    panel.form.updateValues({ cause: 'input' });
+  });
+  await page.locator('#message_box button').first().click();
+  await expect.poll(() => audit().then((a) => a.suspended)).toBe(false);
+  expect((await audit()).names).toEqual([expect.stringMatching(/^Text_.*\.png$/), 'wood']);
+  await page.evaluate(() => Undo.undo());
+  expect(await audit()).toEqual({ names: ['wood'], unique: true, suspended: true });
+  await page.evaluate(() => Undo.redo());
+  expect(await audit()).toMatchObject({ unique: true, suspended: false });
+  expect((await audit()).names.length).toBe(2);
+  // A regeneration that cannot render (raster limit) suspends the text but keeps the native
+  // edit committed and undoable.
+  const failed = await page.evaluate(async () => {
+    const c = Cube.all[0];
+    await Blockbench.bbText.update(c.uuid, { ...c.bb_text, density: 16 });
+    const width = c.to[0] - c.from[0],
+      entries = Undo.history.length;
+    c.select();
+    Undo.initEdit({ elements: [c] });
+    c.to[0] = c.from[0] + 1000;
+    Undo.finishEdit('Stretch');
+    return {
+      width,
+      committed: Undo.history.length === entries + 1 && !Undo.current_save,
+      suspended: c.bb_text.suspended || null,
+    };
+  });
+  expect(failed.committed).toBe(true);
+  expect(failed.suspended).toMatch(/too large/);
+  await page.evaluate(() => Undo.undo());
+  expect(
+    await page.evaluate(() => [
+      Cube.all[0].to[0] - Cube.all[0].from[0],
+      Cube.all[0].bb_text.suspended || null,
+    ]),
+  ).toEqual([failed.width, null]);
+  // Rasterized pixels belong to the user: deleting the cube keeps them like any texture.
+  await page.evaluate(() => {
+    Cube.all[0].select();
+    BarItems.bb_text_bake.trigger();
+  });
+  await expect.poll(() => page.evaluate(() => Cube.all[0].bb_text)).toBe(null);
+  await page.evaluate(() => BarItems.delete.trigger());
+  expect((await audit()).names.length).toBe(2);
+});
+test('undo snapshots share embedded font payloads instead of copying them', async ({ page }) => {
+  await start(page);
+  const result = await page.evaluate(async () => {
+    await Blockbench.bbText.create();
+    // A 40 MB embedded font (CJK fonts are often 10–30 MB as data URLs). It is never decoded
+    // here: only the Undo/save resource snapshots are exercised.
+    const payload = 'data:font/ttf;base64,' + 'A'.repeat(40e6);
+    Project.unhandled_root_fields.bb_text.fonts.push({
+      id: 'font_large',
+      name: 'Large',
+      family: 'Large',
+      format: 'ttf',
+      hash: 'large',
+      data_url: payload,
+    });
+    const cube = Cube.all.find((c) => !c.bb_text) || new Cube({ name: 'box' }).addTo().init();
+    const heap = () => performance.memory?.usedJSHeapSize || 0;
+    const before = heap(),
+      t0 = performance.now();
+    for (let i = 0; i < 20; i++) {
+      Undo.initEdit({ elements: [cube] });
+      cube.from[0] += 1;
+      Undo.finishEdit('Move');
+    }
+    const ms = performance.now() - t0,
+      grew = heap() - before;
+    for (let i = 0; i < 20; i++) Undo.undo();
+    const saved = Codecs.project.compile({ raw: true });
+    return {
+      ms,
+      grewMB: grew / 1e6,
+      restored: Project.unhandled_root_fields.bb_text.fonts.some((f) => f.data_url === payload),
+      saved: saved.unhandled_root_fields.bb_text.fonts.some((f) => f.data_url === payload),
+    };
+  });
+  // Copying 40 MB twice per edit costs well over a second and ~1.6 GB for these 20 edits.
+  expect(result.ms).toBeLessThan(400);
+  expect(result.grewMB).toBeLessThan(200);
+  expect(result.restored).toBe(true);
+  expect(result.saved).toBe(true);
+});
+async function changeUVSize(page, adjust, size) {
+  await page.evaluate(() => BarItems.project_window.click());
+  await page.waitForFunction(() => Dialog.open?.id === 'project');
+  await page.evaluate(() =>
+    [...Dialog.open.object.querySelectorAll('.form_extra_action, i')]
+      .find((e) => /edit/.test(e.textContent) || e.title === 'Change')
+      .click(),
+  );
+  await page.waitForFunction(() => Dialog.open?.id === 'edit_uv_size');
+  await page.evaluate(
+    ({ adjust, size }) => {
+      Dialog.open.setFormValues({ adjust, target_size: [size, size] });
+      Dialog.open.confirm();
+    },
+    { adjust, size },
+  );
+}
+test('project UV resolution formats map the whole text texture and follow resolution changes', async ({
+  page,
+}) => {
+  await start(page);
+  await page.evaluate(() => setupProject(Formats.java_block));
+  const state = () =>
+    page.evaluate(() => {
+      const c = Cube.all.find((c) => c.bb_text),
+        f = c.faces[c.bb_text.plane];
+      return {
+        res: [Project.texture_width, Project.texture_height],
+        uv: [...f.uv],
+        suspended: c.bb_text.suspended || null,
+      };
+    });
+  await page.evaluate(async () => {
+    const id = await Blockbench.bbText.create();
+    const c = Cube.all.find((c) => c.uuid === id);
+    await Blockbench.bbText.update(id, { ...c.bb_text, text: 'SHOP' });
+  });
+  // UV is measured in the project resolution, not in the text texture's pixels.
+  expect(await state()).toEqual({ res: [16, 16], uv: [0, 0, 16, 16], suspended: null });
+  await changeUVSize(page, 'adjust_uv', 32);
+  expect(await state()).toEqual({ res: [32, 32], uv: [0, 0, 32, 32], suspended: null });
+  // Blockbench's Undo restores face UVs but not the project resolution: the plugin refits.
+  await page.evaluate(() => Undo.undo());
+  expect(await state()).toEqual({ res: [32, 32], uv: [0, 0, 32, 32], suspended: null });
+  await changeUVSize(page, 'keep', 64);
+  expect(await state()).toEqual({ res: [64, 64], uv: [0, 0, 64, 64], suspended: null });
+  await page.evaluate(() => {
+    const c = Cube.all.find((c) => c.bb_text);
+    c.select();
+    BarItems.flip_x.trigger();
+  });
+  expect(await state()).toEqual({ res: [64, 64], uv: [64, 0, 0, 64], suspended: null });
+});
+test('carriers saved with pixel UVs in project UV formats are refitted on restore', async ({
+  page,
+}) => {
+  await start(page);
+  await page.evaluate(() => setupProject(Formats.bedrock_block));
+  const result = await page.evaluate(async () => {
+    const id = await Blockbench.bbText.create();
+    const c = Cube.all.find((c) => c.uuid === id),
+      t = Texture.all.find((t) => t.uuid === c.bb_text.texture);
+    // Reproduce a 0.2.3 carrier: UV in texture pixels, fingerprinted by that plugin version.
+    c.faces.up.uv = [0, 0, t.width, t.height];
+    const fingerprint = () => {
+      const geometry = [
+        c.from,
+        c.to,
+        c.rotation,
+        c.origin,
+        c.box_uv,
+        Object.entries(c.faces).map(([k, f]) => [k, f.texture, f.uv, f.rotation]),
+      ];
+      const v = JSON.stringify([...geometry, t.getDataURL()]);
+      let h = 2166136261;
+      for (let i = 0; i < v.length; i++) h = Math.imul(h ^ v.charCodeAt(i), 16777619);
+      return (h >>> 0).toString(16);
+    };
+    c.bb_text.fingerprint = fingerprint();
+    const box = new Cube({ name: 'box' }).addTo().init();
+    Undo.initEdit({ elements: [box] });
+    box.to[0] = 4;
+    Undo.finishEdit('Unrelated');
+    Undo.undo();
+    return { uv: [...c.faces.up.uv], suspended: c.bb_text.suspended || null };
+  });
+  expect(result).toEqual({ uv: [0, 0, 16, 16], suspended: null });
+});
+test('single-texture formats refuse text and leave pasted carriers untouched', async ({ page }) => {
+  await start(page);
+  const clip = await page.evaluate(async () => {
+    await Blockbench.bbText.create();
+    Clipbench.setElements([Cube.all[0]]);
+    Clipbench.groups = undefined;
+    return JSON.parse(JSON.stringify(Clipbench.elements));
+  });
+  await page.evaluate(() => setupProject(Formats.bedrock));
+  await addTexture(page, 'skin', '#8a6b4a');
+  const result = await page.evaluate(async (clip) => {
+    let created = null;
+    try {
+      await Blockbench.bbText.create();
+    } catch (e) {
+      created = String(e);
+    }
+    const skin = Texture.all[0],
+      png = skin.getDataURL();
+    Clipbench.elements = clip;
+    Clipbench.pasteOutliner();
+    const c = Cube.all.find((c) => c.bb_text);
+    let updated = null;
+    try {
+      await Blockbench.bbText.update(c.uuid, { ...c.bb_text, text: 'X' });
+    } catch (e) {
+      updated = String(e);
+    }
+    return {
+      created: /single texture|一张贴图/.test(created),
+      updated: /single texture|一张贴图/.test(updated),
+      textures: Texture.all.map((t) => t.name),
+      skinUnchanged: skin.getDataURL() === png,
+      suspended: c.bb_text.suspended || null,
+    };
+  }, clip);
+  expect(result).toEqual({
+    created: true,
+    updated: true,
+    textures: ['skin'],
+    skinUnchanged: true,
+    suspended: null,
+  });
 });

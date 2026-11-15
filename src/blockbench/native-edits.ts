@@ -1,6 +1,13 @@
+import { snapshotFontStore } from './font-registry';
 /** Native Undo integration has one owner and one symmetric scope per transaction.
  * Content code describes participants and derives their pixels; it never edits aspects.
  * Native aspect arrays remain host-owned (some commands append to them after initEdit).
+ *
+ * Participation is on demand: an ordinary edit that leaves text untouched adds nothing to its
+ * snapshots. Content declares an element or texture with `track` right before changing it;
+ * at that moment the host has not touched it (otherwise the host snapshot already holds it),
+ * so its current state is the BEFORE state. Snapshotting every carrier and texture eagerly made
+ * every native commit and Undo pay for all text in the project.
  */
 type Participant = { element: any; textures: any[] };
 type EditScope = {
@@ -10,10 +17,15 @@ type EditScope = {
   participants: Set<string>;
   capturedTextures: Set<string>;
 };
+/** Declare an element and/or textures about to be changed or removed by derived content. */
+export type Track = (element: any | null, textures?: any[]) => void;
 interface NativeEditOptions {
   delegated(): boolean;
+  /** Every carrier. All are checked for native changes; only tracked ones are snapshotted. */
   participants(): Participant[];
-  derive(elements: any[]): void;
+  derive(elements: any[], track: Track): void;
+  /** Remove content textures that are no longer used, tracking each one first. */
+  release?(track: Track): void;
 }
 
 export function installNativeEdits(options: NativeEditOptions) {
@@ -35,7 +47,7 @@ export function installNativeEdits(options: NativeEditOptions) {
   }
   function captureAfter(scope: EditScope, before: any, after: any) {
     const participants = currentParticipants(scope, before);
-    if (!participants.length && !scope.participants.size) return;
+    if (!participants.length && !scope.participants.size && !scope.capturedTextures.size) return;
     // Existing carriers can cease to be text, or disappear. Their surviving native
     // elements still belong in AFTER; deleted elements must not be recaptured.
     const ids = new Set([...scope.participants, ...participants.map((p) => p.element.uuid)]);
@@ -52,7 +64,7 @@ export function installNativeEdits(options: NativeEditOptions) {
           .map((t) => t.uuid),
       ),
     ]);
-    if (textureIds.size || scope.capturedTextures.size) {
+    if (textureIds.size) {
       before.textures ??= {};
       after.textures ??= {};
       for (const texture of Project.textures) {
@@ -60,11 +72,29 @@ export function installNativeEdits(options: NativeEditOptions) {
       }
     }
   }
+  function tracker(scope: EditScope, save: any): Track {
+    return (element, textures = []) => {
+      if (element) {
+        // New elements have no BEFORE state; AFTER picks them up as participants.
+        if (scope.elements.has(element.uuid) && !save.elements?.[element.uuid])
+          save.addElements([element]);
+        scope.participants.add(element.uuid);
+      }
+      for (const texture of textures) {
+        if (!texture || !scope.textures.has(texture.uuid)) continue;
+        if (!save.textures?.[texture.uuid]) {
+          save.textures ??= {};
+          save.textures[texture.uuid] = texture.getUndoCopy(true);
+        }
+        scope.capturedTextures.add(texture.uuid);
+      }
+    };
+  }
   on('create_undo_save', ({ save }) => {
     if (!Project) return;
     // Reading an empty project must not create text metadata. Null restores the
     // absence of resources when undoing the first native text paste.
-    save.bb_text_resources = structuredClone(Project.unhandled_root_fields?.bb_text ?? null);
+    save.bb_text_resources = snapshotFontStore(Project.unhandled_root_fields?.bb_text ?? null);
     const before = Undo?.current_save;
     const scope = before && scopes.get(before);
     if (scope && scope.project === Project && !options.delegated())
@@ -73,38 +103,28 @@ export function installNativeEdits(options: NativeEditOptions) {
   on('load_undo_save', ({ save }) => {
     if (!Project || !('bb_text_resources' in save)) return;
     if (save.bb_text_resources)
-      Project.unhandled_root_fields.bb_text = structuredClone(save.bb_text_resources);
+      Project.unhandled_root_fields.bb_text = snapshotFontStore(save.bb_text_resources);
     else delete Project.unhandled_root_fields.bb_text;
   });
   on('init_edit', ({ save }) => {
     if (!Project || options.delegated()) return;
-    const participants = options.participants();
-    const scope: EditScope = {
+    // Only record what existed. Nothing is snapshotted until content tracks it.
+    scopes.set(save, {
       project: Project,
       elements: new Set(Project.elements.map((e: any) => e.uuid)),
       textures: new Set(Project.textures.map((t: any) => t.uuid)),
-      participants: new Set(participants.map((p) => p.element.uuid)),
+      participants: new Set(),
       capturedTextures: new Set(),
-    };
-    scopes.set(save, scope);
-    // Snapshot only additional participants. Never replace host-owned aspect arrays.
-    for (const { element, textures } of participants) {
-      if (!save.elements?.[element.uuid]) save.addElements([element]);
-      for (const texture of textures) {
-        if (scope.capturedTextures.has(texture.uuid)) continue;
-        save.textures ??= {};
-        save.textures[texture.uuid] = texture.getUndoCopy(true);
-        scope.capturedTextures.add(texture.uuid);
-      }
-    }
+    });
   });
   on('finish_edit', () => {
     const save = Undo?.current_save;
     const scope = save && scopes.get(save);
     if (!scope || scope.project !== Project || options.delegated()) return;
-    const participants = currentParticipants(scope, save);
-    if (!participants.length && !scope.participants.size) return;
-    options.derive(participants.map((p) => p.element));
+    const track = tracker(scope, save);
+    const carriers = options.participants().map((p) => p.element);
+    if (carriers.length) options.derive(carriers, track);
+    options.release?.(track);
     // The following native create_undo_save captures the derived result. The same
     // hook also handles cancelEdit(true)'s reference snapshot, without deriving.
   });

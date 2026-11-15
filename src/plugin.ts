@@ -45,7 +45,7 @@ export function registerPlugin(): void {
     name: t('bb_text.plugin.title'),
     author: 'EaseCation',
     description: t('bb_text.plugin.description'),
-    version: '0.2.3',
+    version: '0.2.4',
     variant: 'both',
     min_version: '5.2.1',
     tags: ['Minecraft', 'Text', 'BBModel'],

@@ -16,11 +16,13 @@ import {
   clone,
   createText,
   cubes,
+  formatBlocker,
   managed,
   nativeEditing,
   rasterize,
   studioApi,
   syncRecovery,
+  textSize,
   updateText,
 } from './carrier';
 import { convertLegacy } from './convert';
@@ -39,6 +41,60 @@ export const label = (en: string, zh: string, ja = en) =>
 function error(e: unknown) {
   console.error('[BBText]', e);
   Blockbench.showQuickMessage(String(e), 5000);
+}
+/** Standalone text cannot exist in single-texture formats: explain instead of failing. */
+function blockedHere(): string | null {
+  return studioApi()?.active() ? null : formatBlocker();
+}
+function explainBlocked(reason: string) {
+  Blockbench.showMessageBox({
+    title: label(
+      'Text is not available in this format',
+      '此格式不支持文字',
+      'この形式ではテキストを使えません',
+    ),
+    message: reason,
+    icon: 'info',
+  });
+}
+let confirming: Promise<boolean> | null = null;
+/** A suspended standalone carrier keeps manual native changes until the user chooses. */
+function confirmDiscard(reason: string): Promise<boolean> {
+  confirming ??= new Promise<boolean>((resolve) => {
+    Blockbench.showMessageBox(
+      {
+        title: label(
+          'Text was changed manually',
+          '文字已被手动修改',
+          'テキストが手動で変更されました',
+        ),
+        message:
+          reason +
+          '\n\n' +
+          label(
+            'Continuing discards these manual changes and regenerates the text texture.',
+            '继续编辑会丢弃这些手动修改，并按文字参数重新生成贴图。',
+            '続行すると手動の変更を破棄し、テキストを再生成します。',
+          ),
+        icon: 'warning',
+        buttons: [
+          label('Discard and edit', '丢弃并继续编辑', '破棄して編集'),
+          label('Cancel', '取消', 'キャンセル'),
+        ],
+        confirm: 0,
+        cancel: 1,
+      },
+      (button: number) => resolve(button === 0),
+    );
+  }).finally(() => {
+    confirming = null;
+  });
+  return confirming;
+}
+function withoutSuspension(data: TextData): TextData {
+  const next = { ...data };
+  delete next.suspended;
+  return next;
 }
 function selected() {
   const info = studioApi()?.inspect();
@@ -142,7 +198,7 @@ function form(data: TextData, managedText: boolean): Record<string, any> {
       label: label('Raster density', '栅格密度', '解像度'),
       description: label('Independent of font and display size', '独立于字号和显示尺寸'),
       type: 'inline_select',
-      options: { 1: '1×', 2: '2×', 4: '4×' },
+      options: { 1: '1×', 2: '2×', 4: '4×', 8: '8×', 16: '16×' },
       value: String(data.density),
     },
     opacity: {
@@ -182,9 +238,20 @@ export async function editText(id?: string) {
     ? { id: info.id, data: textData(info.data), cube: null, suspended: info.suspended }
     : s;
   if (!target) return;
-  if (target.suspended) {
-    error(target.suspended);
+  const blocked = !target.id && blockedHere();
+  if (blocked) {
+    explainBlocked(blocked);
     return;
+  }
+  if (target.suspended) {
+    if (target.id || !target.cube) {
+      error(target.suspended);
+      return;
+    }
+    if (!(await confirmDiscard(target.suspended))) return;
+    if (request !== editorRequest) return;
+    target.data = withoutSuspension(target.data);
+    target.suspended = undefined;
   }
   const project = Project;
   // Preload every selectable font before opening an Undo session.
@@ -193,7 +260,7 @@ export async function editText(id?: string) {
   const currentTarget = target.id ? studioApi()?.inspect(target.id) : selected();
   if (
     !currentTarget ||
-    JSON.stringify(textData(currentTarget.data)) !== JSON.stringify(target.data)
+    JSON.stringify(withoutSuspension(textData(currentTarget.data))) !== JSON.stringify(target.data)
   )
     return;
   const api = target.id ? studioApi() : null;
@@ -230,12 +297,7 @@ export async function editText(id?: string) {
       const rect = target.id
         ? api.inspect(target.id)?.rect
         : target.cube
-          ? {
-              width: target.cube.to[0] - target.cube.from[0],
-              height:
-                target.cube.to[target.data.plane === 'up' ? 2 : 1] -
-                target.cube.from[target.data.plane === 'up' ? 2 : 1],
-            }
+          ? textSize(target.cube, target.data.plane)
           : undefined;
       latest = revised(target.data, values, rect);
       if (api) {
@@ -308,7 +370,7 @@ function refresh() {
     panel.form.setValues?.(values, false);
     panel.form.update(panel.form.getResult());
     const status = panel.node?.querySelector('.bb-text-status');
-    if (status) status.textContent = s.suspended || '';
+    if (status) status.textContent = (!s.id && blockedHere()) || s.suspended || '';
   } finally {
     refreshing = false;
   }
@@ -359,7 +421,11 @@ export function registerTextUI() {
     actions.push(item);
     return item;
   };
-  const add = action('bb_text_add', t('bb_text.action.add'), 'text_fields', () => createText());
+  const add = action('bb_text_add', t('bb_text.action.add'), 'text_fields', () => {
+    const blocked = blockedHere();
+    if (blocked) return explainBlocked(blocked);
+    return createText();
+  });
   const edit = action(
     'bb_text_edit',
     t('bb_text.action.edit'),
@@ -382,7 +448,11 @@ export function registerTextUI() {
     'bb_text_convert',
     label('Convert legacy text', '转换旧版文字', '旧テキストを変換'),
     'published_with_changes',
-    convertLegacy,
+    () => {
+      const blocked = blockedHere();
+      if (blocked) return explainBlocked(blocked);
+      return convertLegacy();
+    },
     () => !!Project?.elements.some((e: any) => e.type === 'bb_text'),
   );
   const fonts = action(
@@ -400,6 +470,8 @@ export function registerTextUI() {
       if (!s) return;
       if (s.id) studioApi().regenerate(s.id);
       else {
+        const blocked = blockedHere();
+        if (blocked) return explainBlocked(blocked);
         delete s.data.suspended;
         await updateText(s.cube, s.data, true);
       }
@@ -446,9 +518,20 @@ export function registerTextUI() {
     )
       return;
     const s = selected();
-    if (!s || s.suspended) return;
+    if (!s || (!s.id && blockedHere())) return;
     const rect = s.id ? studioApi().inspect(s.id)?.rect : undefined;
     const data = revised(s.data, values, rect);
+    if (s.suspended) {
+      if (s.id || !s.cube || confirming) return;
+      void confirmDiscard(s.suspended)
+        .then((ok) => {
+          if (!ok) return refresh();
+          if (selected()?.cube !== s.cube) return;
+          return updateText(s.cube, withoutSuspension(data), true);
+        })
+        .catch(error);
+      return;
+    }
     void (s.id ? studioApi().update(s.id, data) : updateText(s.cube, data)).catch(error);
   });
   colorControl = inspectorColor(
@@ -526,7 +609,7 @@ export function registerTextUI() {
   document.addEventListener('dblclick', dbl, true);
   cleanup.push(() => document.removeEventListener('dblclick', dbl, true));
   Blockbench.bbText = {
-    version: '0.2.2',
+    version: '0.2.4',
     create: createText,
     edit: editText,
     update: (id: string, data: TextData) =>

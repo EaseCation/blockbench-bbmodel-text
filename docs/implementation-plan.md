@@ -1,3 +1,13 @@
+# Modeling interleave, texture ownership, format UV and performance (0.2.4)
+
+1. Reproduce artist workflows in desktop Blockbench via MCP: text edits interleaved with move, resize, flip, rotate, texture resize, UV size change, paste, delete and Undo.
+2. Track generated texture ownership; never rewrite user textures; release unreferenced generated textures inside the same Undo transaction.
+3. Classify native edits instead of suspending: adopt flipped/rotated faces, map texture resize to density, suspend only on painting or remapping, and confirm before discarding manual changes.
+4. Write UVs in project units for formats without per-texture UV size; refit legacy and Undo-restored carriers; refuse single-texture formats with an explanation.
+5. Make native Undo participation on demand, share font payloads across snapshots, and measure interaction latency on a large model.
+
+---
+
 # Native modeling regression and transaction isolation (0.2.3)
 
 1. Reproduce partial native edits under vanilla, UI-only, text-only and combined plugin environments.

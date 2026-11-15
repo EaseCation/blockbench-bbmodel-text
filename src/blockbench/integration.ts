@@ -1,5 +1,5 @@
 import { textData, renderKey, hash } from '../core/model';
-import { getProjectFonts, fontStore, embedFont } from './font-registry';
+import { getProjectFonts, fontStore, embedFont, copyFont } from './font-registry';
 import { measureText, prepareText, rasterText, readyText } from './text-renderer';
 import { studioApi, fingerprint } from './carrier';
 let off: (() => void) | undefined;
@@ -33,12 +33,12 @@ export function connectStudio(edit: (id: string) => void) {
         const cube = candidate instanceof Cube ? candidate : undefined;
         return cube ? { fingerprint: fingerprint(cube) } : {};
       },
-      resources: () => structuredClone(getProjectFonts()),
+      resources: () => getProjectFonts().map(copyFont),
       importResources: (fonts: any[]) => {
         const store = fontStore();
         for (const font of fonts || [])
           if (font?.id && font?.data_url && !store.fonts.some((f: any) => f.hash === font.hash))
-            store.fonts.push(structuredClone(font));
+            store.fonts.push(copyFont(font));
       },
     });
   };

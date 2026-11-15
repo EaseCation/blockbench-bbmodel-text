@@ -53,6 +53,20 @@ function uniqueFonts(fonts: BBTextFontResource[]): BBTextFontResource[] {
   return result;
 }
 
+/** Copy of a font resource. Fonts are flat, immutable string records whose data URL can be
+ * tens of MB; a shallow copy shares that string instead of duplicating it. */
+export function copyFont<T extends object>(font: T): T {
+  return { ...font };
+}
+/** Snapshot of the project text resources for Undo and saving. structuredClone would copy
+ * every embedded font payload into each snapshot (hundreds of MB over a short history). */
+export function snapshotFontStore(store: any): any {
+  if (!store) return null;
+  const { fonts, ...rest } = store;
+  const copy = structuredClone(rest);
+  if (Array.isArray(fonts)) copy.fonts = fonts.map(copyFont);
+  return copy;
+}
 export function fontStore(project = Project): any {
   project.unhandled_root_fields ??= {};
   return (project.unhandled_root_fields.bb_text ??= { version: 1, fonts: [], entries: {} });

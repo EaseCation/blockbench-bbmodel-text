@@ -13,12 +13,27 @@ export interface TextData {
   resize: 'reflow' | 'scale';
   box_width: number;
   box_height: number;
-  density: 1 | 2 | 4;
-  plane: 'up' | 'south';
+  density: TextDensity;
+  plane: TextPlane;
   reference?: { width: number; height: number };
+  /** UUID of the internal texture generated for, and exclusively owned by, this carrier. */
+  texture?: string;
   fingerprint?: string;
   suspended?: string;
 }
+export type TextPlane = 'north' | 'south' | 'east' | 'west' | 'up' | 'down';
+export const TEXT_PLANES: readonly TextPlane[] = ['north', 'south', 'east', 'west', 'up', 'down'];
+export type TextDensity = 1 | 2 | 4 | 8 | 16;
+export const TEXT_DENSITIES: readonly TextDensity[] = [1, 2, 4, 8, 16];
+/** Nearest supported raster density on a logarithmic scale. */
+export function nearestDensity(value: number): TextDensity {
+  if (!(value > 0)) return 4;
+  return TEXT_DENSITIES.reduce((best, d) =>
+    Math.abs(Math.log2(d / value)) < Math.abs(Math.log2(best / value)) ? d : best,
+  );
+}
+/** Native transforms can leave binary floating noise (30.000000000000004). */
+export const roundSize = (v: number) => Math.round(v * 1e4) / 1e4;
 const finite = (v: unknown, fallback: number) =>
   Number.isFinite(Number(v)) ? Number(v) : fallback;
 export function textData(value: Partial<TextData> = {}): TextData {
@@ -36,15 +51,18 @@ export function textData(value: Partial<TextData> = {}): TextData {
     resize: value.resize === 'scale' ? 'scale' : 'reflow',
     box_width: Math.max(1, finite(value.box_width, 64)),
     box_height: Math.max(1, finite(value.box_height, 16)),
-    density: [1, 2, 4].includes(Number(value.density)) ? (Number(value.density) as 1 | 2 | 4) : 4,
-    plane: value.plane === 'south' ? 'south' : 'up',
+    density: TEXT_DENSITIES.includes(Number(value.density) as TextDensity)
+      ? (Number(value.density) as TextDensity)
+      : 4,
+    plane: TEXT_PLANES.includes(value.plane as TextPlane) ? (value.plane as TextPlane) : 'up',
     ...(value.reference ? { reference: { ...value.reference } } : {}),
+    ...(typeof value.texture === 'string' && value.texture ? { texture: value.texture } : {}),
     ...(value.fingerprint ? { fingerprint: value.fingerprint } : {}),
     ...(value.suspended ? { suspended: value.suspended } : {}),
   };
 }
 export function renderKey(data: TextData): string {
-  const { fingerprint, suspended, ...recipe } = data;
+  const { fingerprint, suspended, texture, ...recipe } = data;
   return JSON.stringify(recipe);
 }
 export function hash(value: string): string {
